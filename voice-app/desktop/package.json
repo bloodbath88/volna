@@ -1,0 +1,13 @@
+{
+  "name": "volna-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Волна — настольное приложение: своё окно без браузерной строки",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^44.8.0"
+  }
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Волна">
+  <rect width="64" height="64" rx="14" fill="#12161d"/>
+  <rect x="0.7" y="0.7" width="62.6" height="62.6" rx="13.3" fill="none" stroke="#6b8cff" stroke-opacity="0.45" stroke-width="1.4"/>
+  <rect x="15.7" y="23.7" width="5.6" height="16.6" rx="2.8" fill="#4fd6a0"/>
+  <rect x="24.7" y="14.7" width="5.6" height="34.6" rx="2.8" fill="#6b8cff"/>
+  <rect x="33.7" y="7.7" width="5.6" height="48.6" rx="2.8" fill="#6b8cff"/>
+  <rect x="42.7" y="19.8" width="5.6" height="24.4" rx="2.8" fill="#4fd6a0"/>
+</svg>

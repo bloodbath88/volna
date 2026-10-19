@@ -1,0 +1,309 @@
+/* «Волна» — минималистичная тёмная тема */
+
+:root{
+  --bg:#0b0d11;
+  --panel:#12161d;
+  --panel2:#171c25;
+  --panel3:#222935;
+  --line:rgba(255,255,255,.07);
+  --line2:rgba(255,255,255,.13);
+  --text:#e9ecf2;
+  --muted:#8d97a8;
+  --accent:#6b8cff;
+  --accent2:#4fd6a0;
+  --red:#ff6b78;
+  --amber:#ffcf6b;
+  --r:14px;
+  --r-sm:10px;
+  --shadow:0 14px 40px rgba(0,0,0,.45);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;color:var(--text);
+  font:15px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  background:
+    radial-gradient(900px 620px at 10% -12%, rgba(66,98,206,.20), transparent 62%),
+    radial-gradient(720px 520px at 104% -4%, rgba(40,160,140,.13), transparent 58%),
+    var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{margin:0;font-weight:600}
+p{margin:0}
+.hidden{display:none !important}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.tiny{font-size:12px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid rgba(107,140,255,.7);outline-offset:2px}
+
+/* ─────────── вход ─────────── */
+
+.join{min-height:100dvh;display:grid;place-items:center;padding:24px}
+.join-card{
+  width:min(520px,100%);display:grid;gap:16px;padding:26px;
+  background:linear-gradient(180deg,rgba(255,255,255,.025),transparent 45%),var(--panel);
+  border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);
+}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:40px;height:40px;flex:none;color:var(--accent);fill:currentColor}
+.logo.small{width:22px;height:22px}
+.brand-text h1{font-size:19px;letter-spacing:.2px}
+.field{display:grid;gap:6px}
+.field > span{font-size:12.5px;color:var(--muted)}
+.field input,.field select{
+  width:100%;padding:11px 12px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:var(--r-sm);outline:none;
+  transition:border-color .15s,background .15s;
+}
+.field input:focus,.field select:focus{border-color:rgba(107,140,255,.6);background:#151a23}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{
+  border:1px solid var(--line2);background:var(--panel3);border-radius:var(--r-sm);
+  padding:10px 14px;cursor:pointer;transition:background .15s,border-color .15s,transform .08s,filter .15s;
+}
+.btn:hover{background:#2a3240}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:linear-gradient(180deg,#6f8dff,#5578f5);border-color:transparent;color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent}
+.btn.big{padding:13px 16px;font-size:16px}
+.btn.small{padding:7px 11px;font-size:13.5px}
+.btn:disabled{opacity:.55;cursor:default}
+.mictest-row{display:flex;align-items:center;gap:12px}
+.mictest{flex:1}
+.mictest .bar{height:8px;background:var(--panel2);border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.mictest .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .06s linear}
+
+/* ─────────── комната ─────────── */
+
+.room{
+  height:100dvh;position:relative;display:grid;gap:12px;padding:12px;
+  grid-template-columns:minmax(0,1fr) 320px;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"top top" "stage side" "ctl ctl";
+}
+.topbar{
+  grid-area:top;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+}
+.top-left{display:flex;align-items:center;gap:10px;min-width:0}
+.top-right{display:flex;align-items:center;gap:12px}
+.room-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 3px rgba(255,255,255,.04);flex:none}
+.dot.ok{background:var(--accent2)}
+.dot.warn{background:var(--amber)}
+.dot.bad{background:var(--red)}
+
+.stage{
+  grid-area:stage;position:relative;min-height:0;overflow:auto;padding:12px;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-content:start}
+.tile{
+  display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 12px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);
+  transition:border-color .18s,box-shadow .18s;
+}
+.tile.speaking{border-color:rgba(79,214,160,.5);box-shadow:0 0 0 1px rgba(79,214,160,.3),0 0 26px -8px rgba(79,214,160,.55)}
+.avatar{
+  width:68px;height:68px;border-radius:50%;display:grid;place-items:center;
+  font-size:24px;font-weight:600;color:#fff;
+  background:linear-gradient(160deg,hsl(var(--h,220) 55% 47%),hsl(calc(var(--h,220) + 26) 58% 35%));
+  transition:box-shadow .18s;
+}
+.tile.speaking .avatar{box-shadow:0 0 0 3px rgba(79,214,160,.75)}
+.t-name{font-size:13.5px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-flags{display:flex;align-items:center;gap:6px;min-height:16px;color:var(--muted);font-size:11.5px}
+.t-flags svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+.stage-wrap{height:100%;display:flex;flex-direction:column;gap:8px}
+#stageVideo{flex:1;min-height:0;width:100%;background:#04060a;border-radius:var(--r-sm);object-fit:contain}
+.stage-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:var(--muted)}
+.stage-actions{display:flex;gap:8px}
+.stage-picker{right:12px;bottom:56px}
+.stage-picker button{
+  display:block;width:100%;text-align:left;background:transparent;border:0;padding:8px 10px;
+  border-radius:8px;cursor:pointer;
+}
+.stage-picker button:hover{background:var(--panel2)}
+
+.side{
+  grid-area:side;display:flex;flex-direction:column;min-height:0;padding:12px;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+}
+.side-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.side-head h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.badge{padding:1px 8px;font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:99px}
+.people{display:flex;flex-direction:column;gap:6px;overflow:auto;min-height:0}
+.person{
+  display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;
+  padding:7px 8px;border:1px solid transparent;border-radius:10px;transition:background .15s,border-color .15s;
+}
+.person:hover{background:var(--panel2)}
+.person.speaking{border-color:rgba(79,214,160,.42);background:rgba(79,214,160,.06)}
+.p-av{
+  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:600;color:#fff;
+  background:linear-gradient(160deg,hsl(var(--h,220) 55% 47%),hsl(calc(var(--h,220) + 26) 58% 35%));
+}
+.p-name{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-sub{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)}
+.p-sub svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.p-vol{display:flex;align-items:center;gap:6px;width:92px}
+.p-vol input[type=range]{width:100%;height:14px;accent-color:var(--accent)}
+
+.controls{grid-area:ctl;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;row-gap:10px}
+.ctl{
+  width:54px;height:54px;border-radius:50%;display:grid;place-items:center;cursor:pointer;
+  background:var(--panel2);border:1px solid var(--line2);color:var(--text);
+  transition:background .15s,border-color .15s,color .15s,transform .08s;
+}
+.ctl:hover{background:var(--panel3)}
+.ctl:active{transform:translateY(1px)}
+.ctl .ic{display:none;width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ctl .ic.show{display:block}
+.ctl.is-off{background:rgba(255,107,120,.15);border-color:rgba(255,107,120,.35);color:#ff9aa4}
+.ctl.is-active{background:linear-gradient(180deg,#6f8dff,#5578f5);border-color:transparent;color:#fff}
+.ctl.danger:hover{background:rgba(255,107,120,.2);color:#ffb3ba}
+/* Завершение звонка всегда видно и узнаваемо: красная кнопка с телефонной трубкой */
+#leaveBtn{background:linear-gradient(180deg,#e8525f,#cf3b48);border-color:transparent;color:#fff;box-shadow:0 6px 16px -8px rgba(232,82,95,.9)}
+#leaveBtn:hover{background:linear-gradient(180deg,#f26672,#e04854);color:#fff}
+#leaveBtn .ic{width:26px;height:26px}
+.danger-text{color:#ff9aa4}
+.danger-text:hover{background:rgba(255,107,120,.18);color:#ffd7db}
+/* У этих кнопок иконка в разметке без класса .show — показываем её (app.js их не переключает) */
+#setBtn .ic:first-of-type,#leaveBtn .ic:first-of-type{display:block}
+
+/* ─────────── настройки и уведомления ─────────── */
+
+.popover{
+  position:absolute;z-index:40;width:284px;display:grid;gap:12px;padding:14px;
+  background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);box-shadow:var(--shadow);
+}
+/* плавное появление панелей и экранов */
+@keyframes volnaIn{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes volnaFade{from{opacity:0}to{opacity:1}}
+.popover:not(.hidden),.chat-panel:not(.hidden),.banner:not(.hidden),.toast{animation:volnaIn .17s ease-out}
+.screen:not(.hidden){animation:volnaFade .18s ease-out}
+@media (prefers-reduced-motion:reduce){
+  .popover:not(.hidden),.chat-panel:not(.hidden),.banner:not(.hidden),.toast,.screen:not(.hidden){animation:none}
+}
+
+/* вкладки внутри главного меню */
+.menu-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.chip{
+  border:1px solid var(--line);background:var(--panel2);color:var(--muted);border-radius:99px;
+  padding:5px 11px;font-size:12.5px;cursor:pointer;transition:background .15s,color .15s,border-color .15s;
+}
+.chip:hover{background:var(--panel3);color:var(--text)}
+.chip.active{background:linear-gradient(180deg,#6f8dff,#5578f5);border-color:transparent;color:#fff;font-weight:600}
+.menu-pane{display:none;flex-direction:column;gap:12px}
+.menu-pane.active{display:flex;animation:volnaFade .16s ease-out}
+.menu-head{display:flex;align-items:center;gap:7px}
+.menu-head svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.room-row .room-name svg,.friend-row .room-name svg{width:13px;height:13px;margin-right:5px;vertical-align:-2px;fill:none;stroke:currentColor;stroke-width:1.8}
+.room-row.text-room{border-color:rgba(79,214,160,.45)}
+.popover h3{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.settings{right:14px;bottom:84px}
+.settings .switch{display:flex;align-items:center;gap:9px;font-size:13.5px;cursor:pointer}
+.settings .switch input{accent-color:var(--accent);width:16px;height:16px}
+
+.toasts{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100;display:grid;gap:8px;pointer-events:none}
+.toast{
+  padding:9px 14px;font-size:13.5px;border-radius:12px;
+  background:rgba(23,28,37,.96);border:1px solid var(--line2);box-shadow:var(--shadow);
+  animation:toastIn .18s ease-out;
+}
+.toast.error{border-color:rgba(255,107,120,.5);color:#ffd7db}
+@keyframes toastIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+.banner{
+  position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:50;
+  display:flex;align-items:center;gap:12px;padding:8px 10px 8px 16px;font-size:13.5px;
+  background:var(--panel);border:1px solid var(--line2);border-radius:99px;box-shadow:var(--shadow);
+}
+.audio-sink{display:none}
+
+/* ─────────── приглашение и предупреждения ─────────── */
+
+.switch{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);cursor:pointer}
+.switch input{accent-color:var(--accent);width:16px;height:16px}
+.auto-switch{justify-self:start;margin-top:-6px}
+
+.invite-banner{
+  display:grid;gap:10px;padding:12px 14px;border-radius:var(--r-sm);
+  background:linear-gradient(180deg,rgba(107,140,255,.16),rgba(107,140,255,.05));
+  border:1px solid rgba(107,140,255,.36);
+}
+.invite-banner .ib-text{display:grid;gap:3px}
+.invite-banner .ib-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.invite-pop{right:14px;top:64px;width:340px;max-width:calc(100vw - 28px)}
+.invite-pop .row2{grid-template-columns:1fr;gap:8px}
+.invite-pop textarea{
+  width:100%;resize:vertical;padding:10px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:var(--r-sm);outline:none;color:var(--text);
+  font:12.5px/1.5 ui-monospace,Consolas,'Courier New',monospace;word-break:break-all;
+}
+.banner.warn{border-color:rgba(255,207,107,.5);color:#ffe6b8;cursor:pointer}
+#micWarn{top:62px}
+
+/* ─────────── меню, комнаты, чат ─────────── */
+
+.settings{max-height:min(76vh,660px);overflow:auto}
+.settings .menu-head{margin-top:6px;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ns-meter{height:6px;background:var(--panel2);border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.ns-meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .08s linear}
+.room-list{display:flex;flex-direction:column;gap:6px;max-height:190px;overflow:auto}
+.room-list .muted{padding:2px 2px 4px}
+.priv-note{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2)}
+.priv-note b{font-weight:600}
+.room-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;padding:6px 8px;border:1px solid transparent;border-radius:9px;background:var(--panel2)}
+.room-row.current{border-color:rgba(107,140,255,.5)}
+.room-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.room-count{font-size:11.5px;color:var(--muted);flex:none}
+.room-row .btn{padding:4px 8px;font-size:12px}
+.room-new{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.room-new input{width:100%;padding:9px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);outline:none}
+.friend-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:6px;align-items:center;padding:6px 8px;border:1px solid transparent;border-radius:9px;background:var(--panel2)}
+.friend-row .btn{padding:4px 8px;font-size:12px}
+.person{grid-template-columns:34px minmax(0,1fr) auto auto}
+.person .friend-add{width:24px;height:24px;padding:0;font-size:13px;line-height:1;color:var(--muted)}
+.person.is-friend .p-name{color:#ffe6b8}
+.person.is-friend .friend-add{color:var(--amber)}
+.menu-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#chatBtn .badge{margin-left:7px}
+
+.chat-panel{
+  position:absolute;right:14px;bottom:84px;z-index:45;width:min(360px,calc(100vw - 28px));
+  max-height:min(58vh,520px);display:flex;flex-direction:column;gap:8px;padding:12px;
+  background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);box-shadow:var(--shadow);
+}
+.chat-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.chat-log{flex:1;min-height:120px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.chat-msg{font-size:13px;line-height:1.35;padding:6px 8px;border-radius:9px;background:var(--panel2);border:1px solid var(--line);word-break:break-word}
+.chat-msg .who{display:block;font-size:11.5px;color:var(--muted);margin-bottom:2px}
+.chat-msg.mine{border-color:rgba(107,140,255,.45)}
+.chat-msg.sys{background:transparent;border-color:transparent;color:var(--muted);font-size:12px;text-align:center}
+.chat-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.chat-form input{width:100%;padding:9px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);outline:none}
+
+/* ─────────── узкие экраны ─────────── */
+
+@media (max-width:900px){
+  .room{
+    grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto minmax(0,1fr) auto auto;
+    grid-template-areas:"top" "stage" "side" "ctl";
+  }
+  .side{max-height:30vh}
+  .p-vol{display:none}
+  .person{grid-template-columns:30px minmax(0,1fr) auto}
+  .person{grid-template-columns:30px minmax(0,1fr)}
+  .settings{left:12px;right:12px;width:auto;bottom:78px}
+  .chat-panel{left:12px;right:12px;width:auto;bottom:78px;max-height:52vh}
+  .invite-pop{left:12px;right:12px;width:auto;top:58px}
+  .join-card{padding:20px}
+  .row2{grid-template-columns:1fr}
+}

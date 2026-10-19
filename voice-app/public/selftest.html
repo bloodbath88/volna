@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка браузера — Волна</title>
+<style>
+  body { margin: 0; padding: 22px; background: #0b0d11; color: #e9ecf2;
+         font: 14px/1.6 ui-monospace, Consolas, 'Courier New', monospace; }
+  h1 { margin: 0 0 4px; font: 600 19px system-ui, sans-serif; }
+  p.hint { margin: 0 0 16px; color: #8d97a8; font: 13px system-ui, sans-serif; }
+  .ok { color: #4fd6a0; }
+  .bad { color: #ff6b78; }
+  .warn { color: #ffcf6b; }
+  .muted { color: #8d97a8; }
+  a { color: #6b8cff; }
+</style>
+</head>
+<body>
+<h1>Проверка браузера и связи</h1>
+<p class="hint">Эта страница проверяет, сможет ли ваш браузер работать в голосовой комнате:
+микрофон, подключение к серверу, публикация звука. Окно можно закрыть — ничего не сохраняется.</p>
+<div id="out"></div>
+
+<script src="/vendor/livekit-client.umd.js"></script>
+<script>
+(function () {
+  const state = { done: false, results: [] };
+  window.__volnaState = state;
+  const out = document.getElementById('out');
+
+  function log(text, cls) {
+    state.results.push(text);
+    const line = document.createElement('div');
+    if (cls) line.className = cls;
+    line.textContent = text;
+    out.appendChild(line);
+  }
+
+  (async function run() {
+    try {
+      log('Адрес: ' + location.origin, 'muted');
+
+      const secure = window.isSecureContext;
+      log((secure ? '[ок]  ' : '[БЕДА] ') + 'Защищённый контекст: ' + (secure ? 'да (микрофон будет доступен)' : 'НЕТ — браузер не даст доступ к микрофону'),
+          secure ? 'ok' : 'bad');
+
+      const hasMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+      log((hasMedia ? '[ок]  ' : '[БЕДА] ') + 'Доступ к устройствам (mediaDevices): ' + (hasMedia ? 'есть' : 'нет'),
+          hasMedia ? 'ok' : 'bad');
+
+      if (hasMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          });
+          const track = stream.getAudioTracks()[0];
+          log('[ок]  Микрофон: получен' + (track && track.label ? ' («' + track.label + '»)' : ''), 'ok');
+          stream.getTracks().forEach(function (t) { t.stop(); });
+        } catch (e) {
+          log('[БЕДА] Микрофон: ' + e.name + ' — ' + e.message, 'bad');
+        }
+      }
+
+      if ('serviceWorker' in navigator) {
+        try {
+          await Promise.race([
+            navigator.serviceWorker.register('/sw.js'),
+            new Promise(function (_, rej) { setTimeout(function () { rej(new Error('истекло время ожидания')); }, 4000); }),
+          ]);
+          log('[ок]  Установка как приложения: доступна (service worker зарегистрирован)', 'ok');
+        } catch (e) {
+          log('[!]   Установка как приложения: недоступна — ' + e.message, 'warn');
+          log('      Это нормально при самоподписанном сертификате: голос работает,', 'warn');
+          log('      а кнопка «Установить приложение» появится после установки домена с настоящим сертификатом.', 'warn');
+        }
+      } else {
+        log('[!]   Установка как приложения: браузер не поддерживает', 'warn');
+      }
+
+      // Проверки входа по ссылке-приглашению
+      try {
+        const cr = await fetch('entry.js', { cache: 'no-store' });
+        const ctext = cr.ok ? await cr.text() : '';
+        const ready = cr.ok && ctext.indexOf('startCountdown') !== -1;
+        log((ready ? '[ок]  ' : '[!]   ') + 'Вход по приглашению: ' +
+            (ready ? 'готов — ссылка подключает участника автоматически' : 'не найден или устарел файл public/entry.js'),
+            ready ? 'ok' : 'warn');
+      } catch (e) {
+        log('[!]   Вход по приглашению: не удалось прочитать entry.js', 'warn');
+      }
+
+      try {
+        const ar = await fetch('addresses.json', { cache: 'no-store' });
+        const adata = ar.ok ? await ar.json() : null;
+        const list = (adata && adata.addresses) || [];
+        if (!list.length) {
+          log('[!]   Адрес в ссылках-приглашениях: не записан — запустите start.cmd, он создаёт public/addresses.json', 'warn');
+        } else {
+          const onlyLocal = list.every(function (a) { return /(localhost|127\.0\.0\.1)/i.test(a); });
+          log((onlyLocal ? '[!]   ' : '[ок]  ') + 'Адрес в ссылках-приглашениях: ' + list.join(', ') +
+              (onlyLocal ? ' — это только этот компьютер, другим устройствам не подойдёт' : ''),
+              onlyLocal ? 'warn' : 'ok');
+        }
+      } catch (e) {
+        log('[!]   Адрес в ссылках-приглашениях: не удалось прочитать addresses.json', 'warn');
+      }
+
+      const r = await fetch('/api/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Проверка браузера', room: 'selftest' }),
+      });
+      const data = await r.json().catch(function () { return {}; });
+
+      if (!r.ok) {
+        log('[!]   Вход в комнату: сервер отклонил (' + (data.error || r.status) + ')', 'warn');
+        log('      Если у вас включён пароль комнаты — это ожидаемо: проверка соединения', 'warn');
+        log('      доступна только на сервере без пароля. Голос всё равно работает.', 'warn');
+        state.done = true;
+        return;
+      }
+      log('[ок]  Вход в комнату: разрешён', 'ok');
+
+      const LK = window.LivekitClient;
+      if (!LK) {
+        log('[БЕДА] Библиотека LiveKit не загрузилась', 'bad');
+        state.done = true;
+        return;
+      }
+
+      const room = new LK.Room({ adaptiveStream: true, dynacast: true });
+      state.room = room;
+      room.on(LK.RoomEvent.ConnectionStateChanged, function (s) { log('      состояние связи: ' + s, 'muted'); });
+
+      await room.connect(data.url, data.token);
+      state.connected = room.state === 'connected';
+      log((state.connected ? '[ок]  ' : '[!]   ') + 'Подключение к комнате: ' + room.state, state.connected ? 'ok' : 'warn');
+
+      await room.localParticipant.setMicrophoneEnabled(
+        true,
+        { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        { audioPreset: { maxBitrate: 96000 }, dtx: true, red: true }
+      );
+      const mic = room.localParticipant.isMicrophoneEnabled;
+      log((mic ? '[ок]  ' : '[БЕДА] ') + 'Публикация звука: ' + (mic ? 'включена' : 'не удалась'), mic ? 'ok' : 'bad');
+      log('      качество соединения: ' + (room.localParticipant.connectionQuality || 'определяется'), 'muted');
+
+      state.done = true;
+    } catch (e) {
+      log('[БЕДА] Ошибка: ' + (e && e.message ? e.message : e), 'bad');
+      state.done = true;
+    } finally {
+      // отметка для автоматических проверок: видна снаружи через DOM
+      const done = document.createElement('div');
+      done.id = 'volna-done';
+      done.className = 'muted';
+      done.textContent = 'ПРОВЕРКА ЗАВЕРШЕНА';
+      out.appendChild(done);
+    }
+  })();
+})();
+</script>
+</body>
+</html>

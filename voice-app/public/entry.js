@@ -1,0 +1,1530 @@
+/**
+ * «Волна» — вход в комнату: приглашения и защита повторного входа.
+ *
+ * Загружается сразу после app.js и достраивает его, не меняя сам app.js:
+ * правку app.js блокирует защита записи на строке отправки ключа комнаты
+ * (см. PROJECT-HANDOVER.md, раздел 8 «Известные ограничения»).
+ *
+ * Что делает этот файл:
+ *   1. Ссылка-приглашение (#i=…): подставляет комнату, ключ и имя и сама подключает
+ *      участника — с обратным отсчётом, который можно отменить.
+ *   2. Повторный вход: события прошлой комнаты больше не могут выбить текущую,
+ *      лишние подключения закрываются, а отказ микрофона не мешает войти и слушать.
+ *   3. После выхода интерфейс возвращается в исходное состояние.
+ *   4. Приглашение копируется с сетевым адресом (из addresses.json), а не с localhost.
+ *   5. Другое окно приложения, получив ссылку, подключается к той же комнате.
+ */
+(function () {
+  'use strict';
+
+  const LK = window.LivekitClient;
+  if (!LK) return; // app.js сам покажет сообщение об отсутствии библиотеки
+
+  const $ = (sel) => document.querySelector(sel);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('volna.' + k); return v == null ? d : v; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('volna.' + k, String(v)); } catch (e) { /* приватный режим */ } },
+  };
+
+  function toast(msg, kind) {
+    const box = $('#toasts');
+    if (!box) return;
+    const t = document.createElement('div');
+    t.className = 'toast' + (kind === 'error' ? ' error' : '');
+    t.textContent = msg;
+    box.append(t);
+    setTimeout(() => t.remove(), 5200);
+  }
+
+  const onJoinScreen = () => {
+    const js = $('#joinScreen');
+    return !!js && !js.classList.contains('hidden');
+  };
+
+  function b64uEncode(text) {
+    const bytes = new TextEncoder().encode(text);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function b64uDecode(text) {
+    const s = String(text || '').replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(s + '='.repeat((4 - (s.length % 4)) % 4));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  /** Код приглашения: комната и ключ доступа в одном коротком куске строки. */
+  function makeCode(room, key) {
+    return b64uEncode(JSON.stringify({ r: room, k: key || '' }));
+  }
+
+  function readCode(raw) {
+    if (!raw) return null;
+    try {
+      const data = JSON.parse(b64uDecode(raw));
+      const room = data && typeof data === 'object' ? String(data.r || '').trim() : '';
+      if (room) return { room: room, key: String(data.k || '') };
+    } catch (e) { /* не наш формат — просто игнорируем */ }
+    return null;
+  }
+
+  /* ═══════════ 1. Устойчивый вход: одна активная комната ═══════════ */
+
+  const OrigRoom = LK.Room;
+  let latest = null;    // последняя созданная комната — только её события управляют интерфейсом
+  let active = null;    // комната, в которой мы сейчас находимся
+  let lastMicError = ''; // последняя причина, по которой не удалось включить микрофон
+  let lastScreenProfile = ''; // профиль, с которым запущена демонстрация экрана
+  const rooms = new Set(); // все комнаты этого окна: лишние закрываем, даже если они ещё подключаются
+
+  function roomsMark() {
+    try { document.documentElement.dataset.volnaRooms = String(rooms.size); } catch (e) { /* не критично */ }
+  }
+
+  function closeRoom(room) {
+    if (!room) return;
+    room.__volnaClosed = true;
+    if (active === room) active = null;
+    rooms.delete(room);
+    roomsMark();
+    try { room.disconnect(); } catch (e) { /* уже закрыта */ }
+  }
+
+  function micReason(err) {
+    const name = err && err.name ? err.name : '';
+    if (name === 'NotAllowedError' || name === 'SecurityError') return 'браузер не дал доступ к микрофону';
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'микрофон не найден';
+    if (name === 'NotReadableError' || name === 'AbortError') return 'микрофон занят другой программой';
+    return (err && err.message) ? err.message : 'неизвестная причина';
+  }
+
+  function showMicWarn(text) {
+    const box = $('#micWarn');
+    const label = $('#micWarnText');
+    if (!box || !label) return;
+    if (text) {
+      label.textContent = text;
+      box.classList.remove('hidden');
+    } else {
+      box.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Шумовой затвор надевается на уже опубликованную дорожку: при создании дорожки
+   * LiveKit ещё не знает аудио-контекст, а после публикации — знает (проверено).
+   */
+  async function attachGate(lp) {
+    if (!NS.on || !lp.getTrackPublication) return;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        const pub = lp.getTrackPublication('microphone');
+        const track = pub && pub.track;
+        if (track && typeof track.setProcessor === 'function') {
+          if (track.__volnaGate) return;
+          await track.setProcessor(makeGateProcessor());
+          track.__volnaGate = true;
+          NS.failed = false;
+          return;
+        }
+      } catch (e) {
+        lastMicError = micReason(e);
+        NS.failed = true;
+        toast('Шумоподавление не запустилось — микрофон работает без него', 'error');
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  }
+
+  /** Отказ микрофона не должен отменять вход: подключаемся, но сообщаем о проблеме. */
+  function guardParticipant(room) {
+    const lp = room.localParticipant;
+    if (!lp || lp.__volnaGuarded) return;
+    lp.__volnaGuarded = true;
+    const setMic = lp.setMicrophoneEnabled.bind(lp);
+    lp.setMicrophoneEnabled = async function (on, capture, publish) {
+      if (on && isTextRoom()) {
+        showMicWarn('Это текстовая комната: микрофон выключен, история переписки не сохраняется.');
+        return null;
+      }
+      try {
+        const res = await setMic(on, Object.assign({}, capture || {}), publish);
+        if (on) {
+          await attachGate(lp);
+          showMicWarn('');
+        }
+        return res;
+      } catch (e) {
+        if (on === false) return null;
+        lastMicError = micReason(e);
+        showMicWarn('Микрофон выключен: ' + lastMicError + '. Нажмите на эту строку, чтобы попробовать снова.');
+        toast('Вошли без микрофона: ' + lastMicError, 'error');
+        return null;
+      }
+    };
+
+    // Профиль показа экрана: для игр — больше кадров в секунду и «движение», для документов — «детали».
+    const setScreen = lp.setScreenShareEnabled.bind(lp);
+    lp.setScreenShareEnabled = async function (on, capture, publish) {
+      if (!on) return setScreen(on, capture, publish);
+      const profile = GAME_Q[gameProfile()] || GAME_Q.fhd60;
+      const cap = Object.assign({}, capture || {}, {
+        resolution: profile.res,
+        contentHint: profile.hint,
+      });
+      const pub = Object.assign({}, publish || {}, {
+        screenShareEncoding: { maxBitrate: profile.bitrate, maxFramerate: profile.res.frameRate },
+        degradationPreference: 'maintain-framerate', // при слабом канале теряется чёткость, а не кадры
+      });
+      lastScreenProfile = profile.label;
+      toast('Показ экрана: ' + profile.label);
+      return setScreen(on, cap, pub);
+    };
+  }
+
+  if (typeof OrigRoom === 'function') {
+    class GuardedRoom extends OrigRoom {
+      constructor(options) {
+        super(options);
+        this.__volnaClosed = false;
+        latest = this;
+        rooms.add(this);
+        roomsMark();
+        // В приложении всегда одна активная комната. Закрываем все прошлые — включая те,
+        // что ещё подключаются: двойное нажатие Enter на полях входа иначе подняло бы
+        // два живых подключения и человек слышал бы себя дважды.
+        Array.from(rooms).forEach((other) => { if (other !== this) closeRoom(other); });
+        const on = this.on.bind(this);
+        this.on = (event, cb) => on(event, (...args) => {
+          if (this.__volnaClosed) return;  // это события уже закрытой комнаты
+          if (latest !== this) return;     // есть более новая комната — не мешаем ей
+          try { return cb(...args); } catch (e) { /* одно событие не должно ломать приложение */ }
+        });
+        // свои подписки: чат комнаты и системные сообщения о входе/выходе
+        try {
+          on(LK.RoomEvent.DataReceived, (payload, participant, kind, topic) => {
+            if (this.__volnaClosed || latest !== this) return;
+            onChatData(payload, participant, topic);
+          });
+          on(LK.RoomEvent.ParticipantConnected, (p) => {
+            if (this.__volnaClosed || latest !== this) return;
+            chatAdd((p && p.name ? p.name : 'Участник') + ' подключился', '', 'sys');
+          });
+          on(LK.RoomEvent.ParticipantDisconnected, (p) => {
+            if (this.__volnaClosed || latest !== this) return;
+            chatAdd((p && p.name ? p.name : 'Участник') + ' вышел', '', 'sys');
+          });
+        } catch (e) { /* не критично */ }
+        const connect = this.connect.bind(this);
+        this.connect = async (...args) => {
+          try {
+            const res = await connect(...args);
+            active = this;
+            guardParticipant(this);
+            return res;
+          } catch (e) {
+            closeRoom(this); // неудачная попытка не оставляет «призрачного» подключения
+            throw e;
+          }
+        };
+        const disconnect = this.disconnect.bind(this);
+        this.disconnect = (...args) => {
+          this.__volnaClosed = true;
+          if (active === this) active = null;
+          rooms.delete(this);
+          roomsMark();
+          return disconnect(...args);
+        };
+      }
+    }
+    try { LK.Room = GuardedRoom; } catch (e) { /* не удалось — приложение работает как есть */ }
+  }
+
+  /* ═══════════ 2. Возврат на экран входа ═══════════ */
+
+  /** Поле пароля прячем только в режиме приглашения — и возвращаем, когда оно нужно. */
+  function showPassField() {
+    const field = $('#passField');
+    if (field && field.dataset.byInvite === '1') {
+      field.classList.remove('hidden');
+      delete field.dataset.byInvite;
+    }
+  }
+
+  function afterLeave() {
+    const hint = $('#joinHint');
+    if (hint) hint.textContent = '';
+    const btn = $('#joinBtn');
+    if (btn) btn.disabled = false;
+    ['#settings', '#invitePop', '#stagePicker'].forEach((sel) => {
+      const node = $(sel);
+      if (node) node.classList.add('hidden');
+    });
+    const dot = $('#connDot');
+    if (dot) dot.className = 'dot';
+    const text = $('#connText');
+    if (text) text.textContent = '';
+    const grid = $('#grid');
+    if (grid) grid.classList.remove('hidden');
+    const stage = $('#stageWrap');
+    if (stage) stage.classList.add('hidden');
+    showMicWarn('');
+    showPassField(); // после выхода пароль снова можно менять руками
+    // чат комнаты начинается заново
+    const chatLog = $('#chatLog');
+    if (chatLog) chatLog.innerHTML = '';
+    CHAT.unread = 0;
+    CHAT.seen.clear();
+    renderChatBadge();
+    // переход в другую комнату, выбранную в главном меню
+    if (ROOMS.pending) {
+      const target = ROOMS.pending;
+      ROOMS.pending = '';
+      const roomInput = $('#roomInput');
+      if (roomInput) roomInput.value = target;
+      setTimeout(doJoin, 200);
+    }
+  }
+
+  function watchJoinScreen() {
+    const js = $('#joinScreen');
+    if (js && 'MutationObserver' in window) {
+      let hidden = js.classList.contains('hidden');
+      new MutationObserver(() => {
+        const now = js.classList.contains('hidden');
+        if (hidden && !now) setTimeout(afterLeave, 0); // приложение вернулось на экран входа
+        hidden = now;
+      }).observe(js, { attributes: true, attributeFilter: ['class'] });
+    }
+    const rs = $('#roomScreen');
+    if (rs && 'MutationObserver' in window) {
+      new MutationObserver(() => {
+        if (rs.classList.contains('hidden')) return;
+        cancelCountdown(); // вход состоялся — отсчёт и подсказка входа больше не нужны
+        const hint = $('#joinHint');
+        if (hint) hint.textContent = '';
+        // имя комнаты для человека: подкомната и текстовая комната выглядят понятно
+        const title = $('#roomTitle');
+        if (title) title.textContent = prettyName(currentRoom());
+        if (isTextRoom()) {
+          showMicWarn('Это текстовая комната: микрофон выключен, история переписки не сохраняется.');
+          chatShow(true);
+        }
+      }).observe(rs, { attributes: true, attributeFilter: ['class'] });
+    }
+    // Если сервер не принял пароль — поле пароля снова показываем, чтобы его можно было исправить.
+    const hint = $('#joinHint');
+    if (hint && 'MutationObserver' in window) {
+      new MutationObserver(() => {
+        if (/парол/i.test(hint.textContent || '')) showPassField();
+      }).observe(hint, { childList: true, characterData: true, subtree: true });
+    }
+  }
+
+  /* ═══════════ 3. Ссылка-приглашение и авто-подключение ═══════════ */
+
+  const IB = { timer: 0, bc: null, addresses: [], id: Math.random().toString(36).slice(2) };
+
+  function inviteFromLocation() {
+    const hash = String(location.hash || '').replace(/^#/, '');
+    if (!hash) return null;
+    const p = new URLSearchParams(hash);
+    const code = readCode(p.get('i'));
+    if (code) return code;
+    const room = (p.get('r') || p.get('room') || '').trim();
+    if (room) return { room: room, key: p.get('k') || '' };
+    return null;
+  }
+
+  /** Заполняет поля входа данными приглашения. */
+  function applyInvite(inv) {
+    if (!inv || !inv.room || !onJoinScreen()) return false;
+    const roomInput = $('#roomInput');
+    const keyInput = $('#passInput');
+    const nameInput = $('#nameInput');
+    if (roomInput) roomInput.value = inv.room;
+    if (keyInput && inv.key) {
+      keyInput.value = inv.key;
+      const field = $('#passField');
+      if (field) { field.classList.add('hidden'); field.dataset.byInvite = '1'; }
+    }
+    if (nameInput && !nameInput.value.trim()) {
+      nameInput.value = store.get('name', '') || ('Гость-' + (1000 + Math.floor(Math.random() * 9000)));
+    }
+    store.set('room', inv.room);
+    if (inv.key && !PRIV.anon) {
+      store.set('invite', makeCode(inv.room, inv.key));
+      store.set('auto', '1');
+      const sw = $('#autoSwitch');
+      if (sw) sw.checked = true; // переключатель должен показывать настоящее состояние
+    }
+    return true;
+  }
+
+  function cancelCountdown() {
+    if (IB.timer) { clearInterval(IB.timer); IB.timer = 0; }
+    const banner = $('#inviteBanner');
+    if (banner) banner.classList.add('hidden');
+  }
+
+  function startCountdown(seconds, title) {
+    if (!onJoinScreen()) return;
+    cancelCountdown();
+    const banner = $('#inviteBanner');
+    if (!banner) { doJoin(); return; }
+    const roomInput = $('#roomInput');
+    const room = ((roomInput && roomInput.value) || '').trim() || 'main';
+    $('#inviteTitle').textContent = title || ('Вас пригласили в комнату «' + room + '»');
+    banner.classList.remove('hidden');
+    let left = Math.max(1, seconds | 0);
+    const tick = () => {
+      if (!onJoinScreen()) { cancelCountdown(); return; }
+      if (left <= 0) { cancelCountdown(); doJoin(); return; }
+      $('#inviteSub').textContent = 'Подключаемся автоматически через ' + left + ' с — имя можно поменять.';
+      left--;
+    };
+    tick();
+    IB.timer = setInterval(tick, 1000);
+  }
+
+  function doJoin() {
+    const roomInput = $('#roomInput');
+    if (roomInput) setRealRoom(roomInput.value);
+    const btn = $('#joinBtn');
+    if (btn && !btn.disabled) btn.click();
+  }
+
+  function cleanHash() {
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* не критично */ }
+  }
+
+  /** Двойное нажатие Enter на полях входа не должно поднимать второе подключение. */
+  function guardDoubleJoin() {
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const t = e.target;
+      if (!t || ['nameInput', 'roomInput', 'passInput'].indexOf(t.id || '') === -1) return;
+      const btn = $('#joinBtn');
+      if (btn && btn.disabled) {
+        e.preventDefault();
+        e.stopImmediatePropagation(); // обработчик app.js не получит это нажатие
+      }
+    }, true);
+  }
+
+  function bindBanner() {
+    const go = $('#inviteGoBtn');
+    const cancel = $('#inviteCancelBtn');
+    const sw = $('#autoSwitch');
+    if (go) go.addEventListener('click', () => { cancelCountdown(); doJoin(); });
+    if (cancel) cancel.addEventListener('click', () => {
+      cancelCountdown();
+      toast('Авто-подключение отменено — данные комнаты уже подставлены');
+    });
+    if (sw) {
+      sw.checked = store.get('auto', '1') !== '0';
+      sw.addEventListener('change', () => {
+        store.set('auto', sw.checked ? '1' : '0');
+        if (!sw.checked) cancelCountdown();
+      });
+    }
+    const warn = $('#micWarn');
+    if (warn) warn.addEventListener('click', () => { const b = $('#micBtn'); if (b) b.click(); });
+  }
+
+  /** Другое окно «Волны» получило ссылку — присоединяемся к той же комнате. */
+  function setupChannel() {
+    if (!('BroadcastChannel' in window)) return;
+    try {
+      IB.bc = new BroadcastChannel('volna');
+      IB.bc.onmessage = (ev) => {
+        const m = ev.data || {};
+        if (m.from === IB.id || m.type !== 'invite' || !m.room) return;
+        if (!onJoinScreen()) return; // мы уже в комнате — не перебиваем разговор
+        const inv = { room: String(m.room), key: String(m.key || '') };
+        if (!applyInvite(inv)) return;
+        toast('Приглашение в комнату «' + inv.room + '»');
+        if (store.get('auto', '1') !== '0') startCountdown(3, 'Вас приглашают в комнату «' + inv.room + '»');
+      };
+    } catch (e) { IB.bc = null; }
+  }
+
+  function announceInvite(inv) {
+    if (!IB.bc) return;
+    try { IB.bc.postMessage({ type: 'invite', room: inv.room, key: inv.key, from: IB.id }); } catch (e) { /* не критично */ }
+  }
+
+  /* ═══════════ 4. Адрес и текст приглашения ═══════════ */
+
+  async function loadAddresses() {
+    let list = [];
+    try {
+      const r = await fetch('addresses.json', { cache: 'no-store' });
+      if (r.ok) {
+        const data = await r.json();
+        list = (data.addresses || []).filter((x) => typeof x === 'string' && /^https?:\/\//i.test(x));
+      }
+    } catch (e) { list = []; }
+    IB.addresses = list;
+    const sel = $('#inviteAddr');
+    if (sel) {
+      sel.innerHTML = '';
+      (list.length ? list : [location.origin]).forEach((a) => sel.append(new Option(a, a)));
+      sel.value = list[0] || location.origin;
+    }
+  }
+
+  function inviteAddress() {
+    const sel = $('#inviteAddr');
+    return (sel && sel.value) || IB.addresses[0] || location.origin;
+  }
+
+  function currentInviteLink() {
+    const keyInput = $('#passInput');
+    return inviteAddress() + '/#i=' + makeCode(currentRoom(), (keyInput && keyInput.value) || '');
+  }
+
+  function renderInvitePop() {
+    const text = $('#inviteText');
+    const note = $('#inviteNote');
+    const link = currentInviteLink();
+    if (text) text.value = link;
+    if (note) {
+      const local = /^(https?:\/\/)?(localhost|127\.0\.0\.1)/i.test(inviteAddress());
+      note.textContent = local
+        ? 'Ссылка ведёт на этот компьютер — участникам она не подойдёт. Запустите start.cmd: приложение подскажет сетевой адрес и подставит его сюда.'
+        : 'Ссылка уже содержит ключ комнаты и подключает автоматически. Отправляйте только своим.';
+    }
+  }
+
+  function bindInviteButton() {
+    const btn = $('#inviteBtn');
+    if (!btn) return;
+    const fresh = btn.cloneNode(true); // снимаем старый обработчик: он копировал ссылку с localhost
+    btn.replaceWith(fresh);
+    fresh.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const pop = $('#invitePop');
+      if (!pop) return;
+      const show = pop.classList.contains('hidden');
+      pop.classList.toggle('hidden');
+      if (show) renderInvitePop();
+    });
+    document.addEventListener('click', (e) => {
+      const pop = $('#invitePop');
+      if (pop && !pop.classList.contains('hidden') && !pop.contains(e.target) && e.target !== fresh) pop.classList.add('hidden');
+    });
+    const copy = async (text, note) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast(note);
+      } catch (err) {
+        window.prompt('Скопируйте и отправьте участнику:', text);
+      }
+    };
+    const copyBtn = $('#inviteCopyBtn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const title = $('#appName');
+        const name = (title && title.textContent) || 'Волна';
+        const roomTitle = $('#roomTitle');
+        const room = ((roomTitle && roomTitle.textContent) || '').trim() || 'main';
+        copy('Заходи в «' + name + '», комната «' + room + '»:\n' + currentInviteLink() +
+          '\n\nОткрой ссылку — приложение подключится само, ничего вводить не нужно.',
+          'Приглашение скопировано — отправьте его участнику');
+      });
+    }
+    const linkBtn = $('#inviteLinkBtn');
+    if (linkBtn) linkBtn.addEventListener('click', () => copy(currentInviteLink(), 'Ссылка скопирована'));
+    const addr = $('#inviteAddr');
+    if (addr) addr.addEventListener('change', renderInvitePop);
+  }
+
+  /* ═══════════ 6. Хост, главное меню, шумоподавление, комнаты, чат ═══════════ */
+
+  /* ---- 6.1. Имя хоста: на машине с сервером по умолчанию «Admin» ---- */
+
+  function isServerMachine() {
+    return /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname);
+  }
+
+  function setHostName() {
+    if (!isServerMachine()) return;
+    const input = $('#nameInput');
+    if (!input) return;
+    const current = (input.value || '').trim();
+    if (!current || /^гость/i.test(current)) input.value = 'Admin';
+  }
+
+  /* ---- 6.2. Шумоподавление: фильтр низов + шумовой затвор ---- */
+
+  const NS = { on: store.get('ns', '1') !== '0' };
+
+  /** Аудио-процессор для LiveKit: в паузах микрофон почти закрыт, голос проходит целиком. */
+  function makeGateProcessor() {
+    const st = { ctx: null, src: null, filter: null, an: null, gate: null, dest: null, raf: 0, buf: null, hold: 0, frames: 0 };
+
+    const api = {
+      name: 'volna-noise-gate',
+      processedTrack: undefined,
+
+      async init(opts) {
+        st.ctx = opts.audioContext;
+        st.frames = 0;
+        st.hold = 0;
+        if (st.ctx && st.ctx.state === 'suspended') {
+          try { await st.ctx.resume(); } catch (e) { /* браузер разбудит его после клика */ }
+        }
+        st.src = st.ctx.createMediaStreamSource(new MediaStream([opts.track]));
+        st.filter = st.ctx.createBiquadFilter();
+        st.filter.type = 'highpass';
+        st.filter.frequency.value = 85;   // гул, ветер, рокот — вниз; голос остаётся
+        st.gate = st.ctx.createGain();
+        st.gate.gain.value = 0.06;
+        st.an = st.ctx.createAnalyser();
+        st.an.fftSize = 512;
+        st.buf = new Uint8Array(st.an.fftSize);
+        st.dest = st.ctx.createMediaStreamDestination();
+        st.src.connect(st.filter);
+        st.filter.connect(st.an);
+        st.filter.connect(st.gate);
+        st.gate.connect(st.dest);
+        api.processedTrack = st.dest.stream.getAudioTracks()[0];
+
+        const tick = () => {
+          st.an.getByteTimeDomainData(st.buf);
+          let sum = 0;
+          for (let i = 0; i < st.buf.length; i++) { const d = (st.buf[i] - 128) / 128; sum += d * d; }
+          const rms = Math.sqrt(sum / st.buf.length);
+          const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+          if (rms > 0.018) st.hold = now + 320;   // слышен голос — держим открытым ещё треть секунды
+          const open = now < st.hold;
+          const target = open ? 1 : 0.06;         // в паузах — почти тишина
+          st.gate.gain.value += (target - st.gate.gain.value) * (open ? 0.55 : 0.1);
+          st.frames++;
+          if (st.frames % 10 === 0) {
+            const meter = $('#nsLevel');
+            if (meter) meter.style.width = Math.min(100, Math.round(rms * 700)) + '%';
+            try { document.documentElement.dataset.volnaGate = String(st.frames); } catch (e) { /* не критично */ }
+          }
+          st.raf = requestAnimationFrame(tick);
+        };
+        st.raf = requestAnimationFrame(tick);
+      },
+
+      async restart(opts) {
+        await api.destroy();
+        await api.init(opts);
+      },
+
+      async destroy() {
+        if (st.raf) { cancelAnimationFrame(st.raf); st.raf = 0; }
+        [st.src, st.filter, st.an, st.gate].forEach((node) => {
+          try { if (node) node.disconnect(); } catch (e) { /* уже отключён */ }
+        });
+        try { if (api.processedTrack) api.processedTrack.stop(); } catch (e) { /* уже остановлен */ }
+        api.processedTrack = undefined;
+      },
+    };
+    return api;
+  }
+
+  /* ---- 6.3. Комнаты: свои комнаты и быстрый переход ---- */
+
+  const ROOMS = { active: [], books: [], pending: '' };
+
+  function loadBooks() {
+    try {
+      const list = JSON.parse(store.get('rooms', '[]'));
+      ROOMS.books = Array.isArray(list) ? list.filter((x) => typeof x === 'string' && x).slice(0, 60) : [];
+    } catch (e) { ROOMS.books = []; }
+  }
+
+  function saveBooks() { store.set('rooms', JSON.stringify(ROOMS.books)); }
+
+  function cleanRoomName(raw) {
+    return String(raw || '').trim().toLowerCase()
+      .replace(/[^a-z0-9а-яё._-]/gi, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 32);
+  }
+
+  const SUB_SEP = '--';
+  const TEXT_ROOM = 'obshaya-perepiska'; // отдельная комната для общих текстовых сообщений
+  let realRoom = '';                     // настоящее имя комнаты (подкомната: «родитель--подкомната»)
+
+  function setRealRoom(name) {
+    realRoom = cleanRoomName(name) || 'main';
+    store.set('room', realRoom);
+    return realRoom;
+  }
+
+  function currentRoom() {
+    return realRoom || cleanRoomName((($('#roomInput') || {}).value) || '') || 'main';
+  }
+
+  function isTextRoom(name) {
+    return String(name || currentRoom()) === TEXT_ROOM;
+  }
+
+  function isSubRoom(name) {
+    return String(name || '').indexOf(SUB_SEP) > 0;
+  }
+
+  function parentOf(name) {
+    const i = String(name || '').indexOf(SUB_SEP);
+    return i > 0 ? String(name).slice(0, i) : '';
+  }
+
+  /** Имя для показа: подкомната — «игры · main», текстовая — «Общая переписка». */
+  function prettyName(name) {
+    const s = String(name || '');
+    if (s === TEXT_ROOM) return 'Общая переписка';
+    const i = s.indexOf(SUB_SEP);
+    return i > 0 ? (s.slice(i + SUB_SEP.length) + ' · ' + s.slice(0, i)) : s;
+  }
+
+  function mk(tag, cls, html) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (html != null) node.innerHTML = html;
+    return node;
+  }
+
+  function inRoom() {
+    const screen = $('#roomScreen');
+    return !!screen && !screen.classList.contains('hidden');
+  }
+
+  async function refreshRooms() {
+    try {
+      const r = await fetch('/api/rooms', { cache: 'no-store' });
+      const data = await r.json();
+      ROOMS.active = (data.rooms || []).filter((x) => x && x.name);
+    } catch (e) { ROOMS.active = []; }
+    renderRooms();
+  }
+
+  function renderRooms() {
+    const box = $('#roomList');
+    if (!box) return;
+    box.innerHTML = '';
+    const here = inRoom() ? currentRoom() : '';
+    const rows = [];
+    const seen = new Set();
+    ROOMS.active.forEach((r) => { seen.add(r.name); rows.push({ name: r.name, count: r.participants || 0, book: ROOMS.books.indexOf(r.name) >= 0 }); });
+    ROOMS.books.forEach((name) => { if (!seen.has(name)) { seen.add(name); rows.push({ name: name, count: 0, book: true }); } });
+    if (!seen.has(TEXT_ROOM)) rows.unshift({ name: TEXT_ROOM, count: 0, book: false, text: true });
+    if (!rows.length) {
+      const empty = document.createElement('p');
+      empty.className = 'muted tiny';
+      empty.textContent = 'Пока пусто: создайте комнату ниже.';
+      box.append(empty);
+      return;
+    }
+    rows.forEach((info) => {
+      const row = document.createElement('div');
+      row.className = 'room-row' + (info.name === here ? ' current' : '') + (info.text ? ' text-room' : '');
+      const name = document.createElement('div');
+      name.className = 'room-name';
+      const label = prettyName(info.name) + (info.text ? ' · текст' : '');
+      name.innerHTML = (info.text ? MENU_ICONS.chat : MENU_ICONS.rooms) +
+        '<span>' + label + (info.name === here ? ' · вы здесь' : (info.count ? ' · ' + info.count + ' чел.' : '')) + '</span>';
+      row.append(name);
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'btn ghost small';
+      go.textContent = info.name === here ? 'Открыть' : 'Войти';
+      go.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (info.name === here) { closeMenu(); return; }
+        switchToRoom(info.name);
+      });
+      row.append(go);
+      if (info.book) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn ghost small';
+        del.title = 'Убрать из своих комнат';
+        del.textContent = '✕';
+        del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          ROOMS.books = ROOMS.books.filter((x) => x !== info.name);
+          saveBooks();
+          renderRooms();
+        });
+        row.append(del);
+      }
+      box.append(row);
+    });
+  }
+
+  function switchToRoom(raw) {
+    const target = cleanRoomName(raw);
+    if (!target) return;
+    if (inRoom() && target === currentRoom()) { closeMenu(); return; }
+    const roomInput = $('#roomInput');
+    if (roomInput) roomInput.value = target;
+    setRealRoom(target);
+    if (!PRIV.anon) store.set('invite', makeCode(target, (($('#passInput') || {}).value) || '')); // чтобы следующий запуск открыл ту же комнату
+    closeMenu();
+    if (inRoom()) {
+      ROOMS.pending = target;
+      const leaveBtn = $('#leaveBtn');
+      if (leaveBtn) leaveBtn.click();
+    } else {
+      doJoin();
+    }
+  }
+
+  function createRoom() {
+    const input = $('#newRoomInput');
+    const name = cleanRoomName(input && input.value);
+    if (!name) { toast('Название комнаты: буквы, цифры, дефис, до 32 знаков', 'error'); return; }
+    if (ROOMS.books.indexOf(name) === -1) { ROOMS.books.unshift(name); saveBooks(); }
+    if (input) input.value = '';
+    toast('Комната «' + name + '» готова');
+    switchToRoom(name);
+  }
+
+  /* ---- 6.4. Друзья: свои люди, которых можно позвать или навестить ---- */
+
+  const FRIENDS = { list: [] };
+
+  function loadFriends() {
+    try {
+      const list = JSON.parse(store.get('friends', '[]'));
+      FRIENDS.list = Array.isArray(list) ? list.filter((f) => f && f.name).slice(0, 100) : [];
+    } catch (e) { FRIENDS.list = []; }
+  }
+
+  function saveFriends() { store.set('friends', JSON.stringify(FRIENDS.list)); }
+
+  function friendByName(name) {
+    const needle = String(name || '').trim().toLowerCase();
+    for (let i = 0; i < FRIENDS.list.length; i++) {
+      if (String(FRIENDS.list[i].name).toLowerCase() === needle) return FRIENDS.list[i];
+    }
+    return null;
+  }
+
+  function addFriend(name, room) {
+    const clean = String(name || '').trim().slice(0, 32);
+    if (!clean || /^admin$/i.test(clean) && isServerMachine() && clean.toLowerCase() === myName().toLowerCase()) {
+      if (!clean) { toast('Введите имя друга', 'error'); return null; }
+    }
+    const roomName = cleanRoomName(room || currentRoom() || (($('#roomInput') || {}).value) || 'main');
+    const exist = friendByName(clean);
+    if (exist) {
+      exist.room = roomName;
+      toast('«' + clean + '» уже в друзьях — обновил комнату');
+    } else {
+      FRIENDS.list.unshift({ name: clean, room: roomName });
+      toast('«' + clean + '» добавлен в друзья');
+    }
+    saveFriends();
+    renderFriends();
+    return clean;
+  }
+
+  function removeFriend(name) {
+    FRIENDS.list = FRIENDS.list.filter((f) => String(f.name) !== String(name));
+    saveFriends();
+    renderFriends();
+  }
+
+  /** Личное приглашение: ссылка ведёт в текущую комнату и запоминается у друга. */
+  function friendCallText(friend) {
+    const room = inRoom() ? currentRoom() : ((($('#roomInput') || {}).value) || 'main');
+    const appName = ($('#appName') || {}).textContent || 'Волна';
+    return friend.name + ', заходи в «' + appName + '», комната «' + prettyName(room) + '»:\n' + currentInviteLink() +
+      '\n\nОткрой ссылку — подключишься сам. Приложение запомнит комнату, и в следующий раз тебя пустит сразу.';
+  }
+
+  async function copyText(text, note) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(note);
+    } catch (e) {
+      window.prompt('Скопируйте и отправьте:', text);
+    }
+  }
+
+  function renderFriends() {
+    const box = $('#friendList');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!FRIENDS.list.length) {
+      const empty = document.createElement('p');
+      empty.className = 'muted tiny';
+      empty.textContent = 'Список пуст: добавьте друга по имени — он появится здесь вместе с комнатой.';
+      box.append(empty);
+      return;
+    }
+    FRIENDS.list.forEach((friend) => {
+      const row = document.createElement('div');
+      row.className = 'friend-row';
+      const title = document.createElement('div');
+      title.className = 'room-name';
+      title.textContent = friend.name + (friend.room ? ' · ' + friend.room : '');
+      row.append(title);
+
+      const call = document.createElement('button');
+      call.type = 'button';
+      call.className = 'btn ghost small';
+      call.title = 'Скопировать личное приглашение в текущую комнату';
+      call.textContent = 'Позвать';
+      call.addEventListener('click', (e) => { e.stopPropagation(); copyText(friendCallText(friend), 'Приглашение для «' + friend.name + '» скопировано'); });
+      row.append(call);
+
+      const visit = document.createElement('button');
+      visit.type = 'button';
+      visit.className = 'btn ghost small';
+      visit.title = 'Зайти в комнату друга';
+      visit.textContent = 'Зайти';
+      visit.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!friend.room) { toast('У друга пока не записана комната', 'error'); return; }
+        switchToRoom(friend.room);
+      });
+      row.append(visit);
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn ghost small';
+      del.title = 'Убрать из друзей';
+      del.textContent = '✕';
+      del.addEventListener('click', (e) => { e.stopPropagation(); removeFriend(friend.name); });
+      row.append(del);
+      box.append(row);
+    });
+  }
+
+  /** Отмечаем друзей в списке участников и даём добавить нового одним нажатием. */
+  function markFriendsInList() {
+    const selfId = active && active.localParticipant ? active.localParticipant.identity : '';
+    const rows = document.querySelectorAll('#people .person');
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const nameEl = row.querySelector('.p-name');
+      if (!nameEl) continue;
+      const isSelf = (selfId && row.dataset.id === selfId) || /·\s*вы\s*$/.test(String(nameEl.textContent || ''));
+      if (isSelf) {
+        row.classList.remove('is-friend');
+        const own = row.querySelector('.friend-add');
+        if (own) own.remove();
+        delete row.dataset.friendMark;
+        continue;
+      }
+      const name = String(nameEl.textContent || '').replace(/\s*·\s*вы$/, '').trim();
+      if (!name) continue;
+      const isFriend = !!friendByName(name);
+      row.classList.toggle('is-friend', isFriend);
+      if (row.dataset.friendMark !== '1') {
+        row.dataset.friendMark = '1';
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'btn ghost small friend-add';
+        add.title = isFriend ? 'Уже в друзьях' : 'Добавить в друзья';
+        add.textContent = isFriend ? '★' : '+';
+        add.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (friendByName(name)) { removeFriend(name); add.textContent = '+'; add.title = 'Добавить в друзья'; }
+          else { addFriend(name, currentRoom()); add.textContent = '★'; add.title = 'Уже в друзьях'; }
+        });
+        row.append(add);
+      } else {
+        const add = row.querySelector('.friend-add');
+        if (add) {
+          add.textContent = isFriend ? '★' : '+';
+          add.title = isFriend ? 'Уже в друзьях' : 'Добавить в друзья';
+        }
+      }
+    }
+  }
+
+  /* ---- 6.5. Профили демонстрации экрана (для игр и видео) ---- */
+
+  const GAME_Q = {
+    fhd60: { label: '1080p · 60 кадров/с · плавно', res: { width: 1920, height: 1080, frameRate: 60 }, bitrate: 8000000, hint: 'motion' },
+    hd60: { label: '720p · 60 кадров/с · плавно (слабее канал)', res: { width: 1280, height: 720, frameRate: 60 }, bitrate: 4000000, hint: 'motion' },
+    qhd60: { label: '1440p · 60 кадров/с · максимально', res: { width: 2560, height: 1440, frameRate: 60 }, bitrate: 12000000, hint: 'motion' },
+    text: { label: 'Текст и документы · детально', res: { width: 1920, height: 1080, frameRate: 30 }, bitrate: 4500000, hint: 'detail' },
+  };
+
+  function gameProfile() {
+    const key = store.get('gameQ', 'fhd60');
+    return GAME_Q[key] ? key : 'fhd60';
+  }
+
+  function fillGameSelect() {
+    const sel = $('#gameQuality');
+    if (!sel) return;
+    sel.innerHTML = '';
+    Object.keys(GAME_Q).forEach((k) => sel.append(new Option(GAME_Q[k].label, k)));
+    sel.value = gameProfile();
+    sel.addEventListener('change', () => {
+      store.set('gameQ', sel.value);
+      toast('Профиль показа: ' + GAME_Q[sel.value].label);
+    });
+  }
+
+  /* ---- 6.6. Чат комнаты (каналы данных LiveKit) ---- */
+
+  const CHAT = { open: false, unread: 0, seen: new Set(), max: 200, topic: 'volna-chat' };
+
+  function myName() {
+    const input = $('#nameInput');
+    return ((input && input.value) || '').trim() || 'Гость';
+  }
+
+  function renderChatBadge() {
+    const badge = $('#chatBadge');
+    if (!badge) return;
+    badge.textContent = String(CHAT.unread);
+    badge.classList.toggle('hidden', CHAT.unread === 0);
+  }
+
+  function chatScroll() {
+    const log = $('#chatLog');
+    if (log) log.scrollTop = log.scrollHeight;
+  }
+
+  function chatAdd(text, who, kind, id) {
+    const log = $('#chatLog');
+    if (!log) return;
+    if (id) {
+      if (CHAT.seen.has(id)) return;
+      CHAT.seen.add(id);
+      if (CHAT.seen.size > 500) CHAT.seen.clear();
+    }
+    const row = document.createElement('div');
+    row.className = 'chat-msg' + (kind === 'sys' ? ' sys' : (who && who === myName() ? ' mine' : ''));
+    if (kind !== 'sys') {
+      const w = document.createElement('span');
+      w.className = 'who';
+      w.textContent = who || 'Гость';
+      row.append(w);
+    }
+    row.append(document.createTextNode(String(text || '')));
+    log.append(row);
+    while (log.children.length > CHAT.max) log.removeChild(log.firstChild);
+    if (!CHAT.open && kind !== 'sys') { CHAT.unread++; renderChatBadge(); }
+    chatScroll();
+  }
+
+  function chatShow(show) {
+    CHAT.open = !!show;
+    const panel = $('#chatPanel');
+    const toggle = $('#chatToggle');
+    if (panel) panel.classList.toggle('hidden', !CHAT.open);
+    if (toggle) toggle.checked = CHAT.open;
+    if (CHAT.open) {
+      CHAT.unread = 0;
+      renderChatBadge();
+      chatScroll();
+      const input = $('#chatInput');
+      if (input) input.focus();
+    }
+  }
+
+  function chatSend(text) {
+    const body = String(text || '').trim();
+    if (!body) return;
+    if (!active) { toast('Чат доступен в комнате', 'error'); return; }
+    const msg = { t: 'msg', id: Math.random().toString(36).slice(2), name: myName(), text: body.slice(0, 500) };
+    try {
+      active.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(msg)), { reliable: true, topic: CHAT.topic });
+      chatAdd(msg.text, msg.name, 'me', msg.id);
+    } catch (e) {
+      toast('Не удалось отправить: ' + ((e && e.message) || e), 'error');
+    }
+  }
+
+  function onChatData(payload, participant, topic) {
+    if (topic && topic !== CHAT.topic) return;
+    let msg = null;
+    try { msg = JSON.parse(new TextDecoder().decode(payload)); } catch (e) { return; }
+    if (!msg) return;
+    if (msg.t === 'sub' && msg.name) {
+      // Кто-то создал подкомнату в этой комнате — добавляем её в список у себя
+      addSub(currentRoom(), msg.name);
+      renderSubs();
+      chatAdd('Создана подкомната «' + msg.name + '» — войти можно в меню, раздел «Подкомнаты»', '', 'sys');
+      return;
+    }
+    if (msg.t !== 'msg' || !msg.text) return;
+    chatAdd(String(msg.text).slice(0, 500), (participant && participant.name) || msg.name || 'Гость', 'other', msg.id);
+  }
+
+  /* ---- 6.5. Главное меню ---- */
+
+  function closeMenu() {
+    const s = $('#settings');
+    if (s) s.classList.add('hidden');
+    const i = $('#invitePop');
+    if (i) i.classList.add('hidden');
+  }
+
+  function menuOpen() {
+    const s = $('#settings');
+    return !!s && !s.classList.contains('hidden');
+  }
+
+  function syncNsHint() {
+    const hint = $('#nsHint');
+    if (hint) {
+      hint.textContent = NS.on
+        ? 'Открыт только когда вы говорите: гул, шипение и щелчки в паузах не уходят в комнату.'
+        : 'Выключено: в комнату уходит всё, что слышит микрофон (встроенное шумоподавление браузера остаётся).';
+    }
+    if (!NS.on) {
+      const meter = $('#nsLevel');
+      if (meter) meter.style.width = '0%';
+    }
+  }
+
+  function syncMenuSwitches() {
+    const ns = $('#nsToggle');
+    if (ns) ns.checked = NS.on;
+    const chat = $('#chatToggle');
+    if (chat) chat.checked = CHAT.open;
+    syncNsHint();
+  }
+
+  /** Включить/выключить шумовой затвор на текущей дорожке — без переподключения. */
+  async function applyGate() {
+    if (!active) return;
+    const lp = active.localParticipant;
+    try {
+      const pub = lp.getTrackPublication && lp.getTrackPublication('microphone');
+      const track = pub && pub.track;
+      if (!track) return;
+      if (NS.on) {
+        if (typeof track.setProcessor === 'function' && !track.__volnaGate) {
+          await track.setProcessor(makeGateProcessor());
+          track.__volnaGate = true;
+        }
+      } else if (typeof track.stopProcessor === 'function' && track.__volnaGate) {
+        await track.stopProcessor();
+        delete track.__volnaGate;
+      }
+      NS.failed = false;
+    } catch (e) {
+      NS.failed = true;
+      lastMicError = micReason(e);
+      toast('Шумоподавление: настройку применить не удалось, микрофон работает без него', 'error');
+    }
+  }
+
+  function bindMenu() {
+    const setBtn = $('#setBtn');
+    if (setBtn) {
+      setBtn.title = 'Главное меню';
+      setBtn.addEventListener('click', () => {
+        setTimeout(() => { if (menuOpen()) { refreshRooms(); renderFriends(); syncMenuSwitches(); } }, 0);
+      });
+    }
+    const ns = $('#nsToggle');
+    if (ns) {
+      ns.addEventListener('change', () => {
+        NS.on = ns.checked;
+        store.set('ns', NS.on ? '1' : '0');
+        syncNsHint();
+        applyGate();
+        toast(NS.on ? 'Шумоподавление включено' : 'Шумоподавление выключено');
+      });
+    }
+    const chatToggle = $('#chatToggle');
+    if (chatToggle) chatToggle.addEventListener('change', () => chatShow(chatToggle.checked));
+    const newBtn = $('#newRoomBtn');
+    if (newBtn) newBtn.addEventListener('click', (e) => { e.stopPropagation(); createRoom(); });
+    const subBtn = $('#newSubBtn');
+    if (subBtn) subBtn.addEventListener('click', (e) => { e.stopPropagation(); createSub(); });
+    const subInput = $('#newSubInput');
+    if (subInput) {
+      subInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); createSub(); }
+      });
+    }
+    const friendBtn = $('#newFriendBtn');
+    if (friendBtn) {
+      friendBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const input = $('#newFriendInput');
+        const added = addFriend(input ? input.value : '', currentRoom());
+        if (added && input) input.value = '';
+      });
+    }
+    const friendInput = $('#newFriendInput');
+    if (friendInput) {
+      friendInput.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const added = addFriend(friendInput.value, currentRoom());
+        if (added) friendInput.value = '';
+      });
+    }
+    const newInput = $('#newRoomInput');
+    if (newInput) {
+      newInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); createRoom(); }
+      });
+    }
+    const menuInvite = $('#menuInviteBtn');
+    if (menuInvite) menuInvite.addEventListener('click', () => { const b = $('#inviteBtn'); if (b) b.click(); });
+    const menuLeave = $('#menuLeaveBtn');
+    if (menuLeave) menuLeave.addEventListener('click', () => { closeMenu(); const b = $('#leaveBtn'); if (b) b.click(); });
+    const chatBtn = $('#chatBtn');
+    if (chatBtn) chatBtn.addEventListener('click', () => chatShow(!CHAT.open));
+    const chatClose = $('#chatCloseBtn');
+    if (chatClose) chatClose.addEventListener('click', () => chatShow(false));
+    const chatForm = $('#chatForm');
+    if (chatForm) {
+      chatForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const input = $('#chatInput');
+        chatSend(input ? input.value : '');
+        if (input) input.value = '';
+      });
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (menuOpen()) { closeMenu(); return; }
+      if (CHAT.open) chatShow(false);
+    });
+  }
+
+  /* ---- 6.7. Отладочные маркеры (для проверок и будущих правок) ---- */
+
+  function setupDebug() {
+    window.__volnaDebug = {
+      version: 3,
+      inRoom: inRoom,
+      currentRoom: currentRoom,
+      room: () => active,
+      lastMicError: () => lastMicError,
+      lastScreenProfile: () => lastScreenProfile,
+      friends: () => FRIENDS.list,
+      gameProfile: gameProfile,
+      subs: () => ({ room: currentRoom(), list: subsOf(isSubRoom(currentRoom()) ? parentOf(currentRoom()) : currentRoom()) }),
+      privacy: () => ({ anon: PRIV.anon }),
+      textRoom: () => isTextRoom(),
+      rooms: () => ({ active: ROOMS.active, books: ROOMS.books }),
+      chat: () => ({ open: CHAT.open, unread: CHAT.unread, messages: $('#chatLog') ? $('#chatLog').children.length : 0 }),
+      ns: () => ({ on: NS.on, frames: Number(document.documentElement.dataset.volnaGate || 0) }),
+      switchToRoom: switchToRoom,
+      createRoom: createRoom,
+      sendChat: chatSend,
+    };
+  }
+
+  /* ---- 6.8. Значки и вкладки главного меню ---- */
+
+  const MENU_ICONS = {
+    sound: '<svg viewBox="0 0 24 24"><path d="M12 3.6a2.6 2.6 0 0 1 2.6 2.6v5.8a2.6 2.6 0 0 1-5.2 0V6.2A2.6 2.6 0 0 1 12 3.6Z"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M12 17v3.4"/></svg>',
+    rooms: '<svg viewBox="0 0 24 24"><path d="M4 11.2 12 4.4l8 6.8"/><path d="M6.6 10.6V19.6h10.8v-9"/></svg>',
+    people: '<svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.2"/><path d="M3.6 19.4c0-2.9 2.5-4.8 5.4-4.8s5.4 1.9 5.4 4.8"/><path d="M16.4 8.6a3 3 0 0 1 0 5.8"/></svg>',
+    more: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/></svg>',
+    noise: '<svg viewBox="0 0 24 24"><path d="M4 12h2l2-5 3 10 2.5-7 2 4h4.5"/></svg>',
+    screen: '<svg viewBox="0 0 24 24"><rect x="3.2" y="4.6" width="17.6" height="11.6" rx="2"/><path d="M9 19.4h6"/><path d="M12 16.2v3.2"/></svg>',
+    friend: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.6" r="3.2"/><path d="M5.8 19.4c0-3.2 2.8-5.4 6.2-5.4s6.2 2.2 6.2 5.4"/></svg>',
+    sub: '<svg viewBox="0 0 24 24"><path d="M7 5.5h10a1.5 1.5 0 0 1 1.5 1.5V19a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V7A1.5 1.5 0 0 1 7 5.5Z"/><path d="M9.5 10h5"/></svg>',
+    up: '<svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="M6.5 10.5 12 5l5.5 5.5"/></svg>',
+    chat: '<svg viewBox="0 0 24 24"><path d="M4.5 6.5h15v9h-9l-6 4z"/></svg>',
+    lock: '<svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>',
+  };
+
+  const MENU_PANES = [
+    ['sound', 'Звук', 'sound'],
+    ['rooms', 'Комнаты', 'rooms'],
+    ['people', 'Люди', 'people'],
+    ['more', 'Ещё', 'more'],
+  ];
+
+  const MENU_SECTIONS = {
+    'Шумоподавление': 'sound',
+    'Демонстрация экрана': 'sound',
+    'Комнаты': 'rooms',
+    'Подкомнаты': 'rooms',
+    'Друзья': 'people',
+    'Чат и выход': 'more',
+    'Приватность': 'more',
+  };
+
+  const MENU_HEAD_ICONS = {
+    'Шумоподавление': 'noise',
+    'Демонстрация экрана': 'screen',
+    'Комнаты': 'rooms',
+    'Подкомнаты': 'sub',
+    'Друзья': 'friend',
+    'Чат и выход': 'chat',
+    'Приватность': 'lock',
+  };
+
+  function showPane(key) {
+    const panel = $('#settings');
+    if (!panel) return;
+    Array.from(panel.querySelectorAll('.menu-tabs .chip')).forEach((c) => c.classList.toggle('active', c.dataset.pane === key));
+    Array.from(panel.querySelectorAll('.menu-pane')).forEach((p) => p.classList.toggle('active', p.dataset.pane === key));
+    if (key === 'rooms') { refreshRooms(); renderSubs(); }
+    if (key === 'people') renderFriends();
+  }
+
+  /** Панель настроек превращается в меню с вкладками: звук, комнаты, люди, ещё. */
+  function buildMenuTabs() {
+    const panel = $('#settings');
+    if (!panel || panel.dataset.tabs === '1') return;
+    panel.dataset.tabs = '1';
+
+    const bar = mk('div', 'menu-tabs');
+    const panes = {};
+    MENU_PANES.forEach(([key, label, icon]) => {
+      const chip = mk('button', 'chip', (MENU_ICONS[icon] || '') + '<span>' + label + '</span>');
+      chip.type = 'button';
+      chip.dataset.pane = key;
+      chip.addEventListener('click', (e) => { e.stopPropagation(); showPane(key); });
+      bar.append(chip);
+      const pane = mk('div', 'menu-pane');
+      pane.dataset.pane = key;
+      panes[key] = pane;
+    });
+    const title = panel.querySelector('h3');
+    if (title) title.after(bar); else panel.prepend(bar);
+
+    // Сначала переносим содержимое, только потом добавляем сами вкладки в панель,
+    // иначе обход соседних узлов зацепит уже добавленные панели.
+    ['#micSelect2', '#modeSelect2', '#screenSelect', '#pttToggle', '#nsToggle', '#gameQuality'].forEach((sel) => {
+      const node = $(sel);
+      const wrapper = node && node.closest('.field, .switch');
+      if (wrapper) panes.sound.append(wrapper);
+    });
+
+    // Секции с заголовками переезжают целиком (заголовок + всё до следующего заголовка)
+    Array.from(panel.querySelectorAll('.menu-head')).forEach((head) => {
+      const name = (head.textContent || '').trim();
+      const pane = panes[MENU_SECTIONS[name]];
+      if (!pane) return;
+      const iconKey = MENU_HEAD_ICONS[name];
+      if (iconKey && !head.querySelector('svg')) head.insertAdjacentHTML('afterbegin', MENU_ICONS[iconKey]);
+      const batch = [head];
+      let node = head;
+      while (node.nextElementSibling && !node.nextElementSibling.classList.contains('menu-head') && !node.nextElementSibling.classList.contains('menu-pane')) {
+        node = node.nextElementSibling;
+        batch.push(node);
+      }
+      batch.forEach((n) => pane.append(n));
+    });
+
+    MENU_PANES.forEach(([key]) => panel.append(panes[key]));
+    showPane('sound');
+  }
+
+  /* ---- 6.9. Комната для общих текстовых сообщений ---- */
+
+  function enterTextRoom() {
+    if (isTextRoom()) { closeMenu(); return; }
+    toast('Общая переписка: текст без звука');
+    switchToRoom(TEXT_ROOM);
+  }
+
+  /* ---- 6.10. Подкомнаты: своя связь и свой чат внутри комнаты ---- */
+
+  const SUBS = { byRoom: {} };
+
+  function loadSubs() {
+    try {
+      const data = JSON.parse(store.get('subs', '{}'));
+      SUBS.byRoom = (data && typeof data === 'object') ? data : {};
+    } catch (e) { SUBS.byRoom = {}; }
+  }
+
+  function saveSubs() { store.set('subs', JSON.stringify(SUBS.byRoom)); }
+
+  function subsOf(room) {
+    const list = SUBS.byRoom[String(room || currentRoom())];
+    return Array.isArray(list) ? list : [];
+  }
+
+  function addSub(room, name) {
+    const parent = cleanRoomName(room || currentRoom());
+    const sub = cleanRoomName(name);
+    if (!parent || !sub) return '';
+    const list = subsOf(parent).slice();
+    if (list.indexOf(sub) === -1) { list.push(sub); SUBS.byRoom[parent] = list; saveSubs(); }
+    return parent + SUB_SEP + sub;
+  }
+
+  function removeSub(room, name) {
+    const parent = cleanRoomName(room || currentRoom());
+    SUBS.byRoom[parent] = subsOf(parent).filter((x) => x !== name);
+    saveSubs();
+    renderSubs();
+  }
+
+  function announceSub(name) {
+    if (!active) return;
+    try {
+      active.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify({ t: 'sub', name: name })),
+        { reliable: true, topic: CHAT.topic }
+      );
+    } catch (e) { /* остальные узнают при следующем обмене */ }
+  }
+
+  function renderSubs() {
+    const box = $('#subList');
+    if (!box) return;
+    box.innerHTML = '';
+    const here = currentRoom();
+    const parent = isSubRoom(here) ? parentOf(here) : here;
+
+    if (isSubRoom(here)) {
+      const back = mk('div', 'room-row');
+      const backName = mk('div', 'room-name', MENU_ICONS.up + '<span>Вернуться в общую комнату</span>');
+      back.append(backName);
+      const backBtn = mk('button', 'btn ghost small');
+      backBtn.type = 'button';
+      backBtn.textContent = 'Войти';
+      backBtn.addEventListener('click', (e) => { e.stopPropagation(); switchToRoom(parent); });
+      back.append(backBtn);
+      box.append(back);
+    }
+
+    const list = subsOf(parent);
+    if (!list.length) {
+      const empty = mk('p', 'muted tiny');
+      empty.textContent = 'Подкомнат пока нет: создайте — в них своя связь и свой чат.';
+      box.append(empty);
+      return;
+    }
+    list.forEach((sub) => {
+      const id = parent + SUB_SEP + sub;
+      const row = mk('div', 'room-row' + (id === here ? ' current' : ''));
+      row.append(mk('div', 'room-name', MENU_ICONS.sub + '<span>' + (id === here ? sub + ' · вы здесь' : sub) + '</span>'));
+      const go = mk('button', 'btn ghost small');
+      go.type = 'button';
+      go.textContent = id === here ? 'Открыть' : 'Войти';
+      go.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (id === here) { closeMenu(); return; }
+        switchToRoom(id);
+      });
+      row.append(go);
+      const del = mk('button', 'btn ghost small');
+      del.type = 'button';
+      del.title = 'Убрать из списка';
+      del.textContent = '✕';
+      del.addEventListener('click', (e) => { e.stopPropagation(); removeSub(parent, sub); });
+      row.append(del);
+      box.append(row);
+    });
+  }
+
+  function createSub() {
+    const input = $('#newSubInput');
+    const sub = cleanRoomName(input && input.value);
+    if (!sub) { toast('Название подкомнаты: буквы, цифры, дефис', 'error'); return; }
+    const parent = isSubRoom(currentRoom()) ? parentOf(currentRoom()) : currentRoom();
+    const id = addSub(parent, sub);
+    if (input) input.value = '';
+    if (inRoom()) announceSub(sub); // общая комната узнает о новой подкомнате
+    renderSubs();
+    toast('Подкомната «' + sub + '» готова — входим');
+    switchToRoom(id);
+  }
+
+  /* ---- 6.11. Приватность: без персональных данных ---- */
+
+  const PRIV = { anon: store.get('anon', '0') === '1' };
+
+  function applyAnon() {
+    const sw = $('#anonToggle');
+    if (sw) sw.checked = PRIV.anon;
+    if (PRIV.anon) store.set('name', '');   // имя не сохраняем между запусками
+  }
+
+  function forgetEverything() {
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.indexOf('volna.') === 0)
+        .forEach((k) => localStorage.removeItem(k));
+    } catch (e) { /* приватный режим браузера */ }
+    toast('Сохранённые данные удалены — страница перезагрузится');
+    setTimeout(() => location.reload(), 900);
+  }
+
+  function bindPrivacy() {
+    const sw = $('#anonToggle');
+    if (sw) {
+      sw.addEventListener('change', () => {
+        PRIV.anon = sw.checked;
+        store.set('anon', PRIV.anon ? '1' : '0');
+        if (PRIV.anon) {
+          store.set('name', '');
+          store.set('invite', '');
+          toast('Анонимный вход: имя и приглашение больше не сохраняются');
+        } else {
+          toast('Имя и приглашение снова сохраняются на этом устройстве');
+        }
+      });
+    }
+    const forget = $('#forgetBtn');
+    if (forget) forget.addEventListener('click', (e) => { e.stopPropagation(); forgetEverything(); });
+    const textBtn = $('#textRoomBtn');
+    if (textBtn) textBtn.addEventListener('click', (e) => { e.stopPropagation(); enterTextRoom(); });
+  }
+
+  /* ═══════════ 5. Запуск ═══════════ */
+  function initEntry() {
+    document.documentElement.dataset.volnaEntry = '1'; // отметка для selftest.html и отладки
+    watchJoinScreen();
+    guardDoubleJoin();
+    bindBanner();
+    bindInviteButton();
+    bindMenu();
+    loadBooks();
+    loadSubs();
+    loadFriends();
+    renderFriends();
+    renderSubs();
+    fillGameSelect();
+    buildMenuTabs();
+    bindPrivacy();
+    applyAnon();
+    syncNsHint();
+    setupDebug();
+    setInterval(() => { if (inRoom()) markFriendsInList(); }, 2000);
+    setupChannel();
+    loadAddresses();
+    setHostName(); // на машине с сервером имя по умолчанию — «Admin»
+
+    const inv = inviteFromLocation();
+    if (inv && applyInvite(inv)) {
+      cleanHash();                 // ключ комнаты не остаётся в адресной строке
+      announceInvite(inv);
+      setHostName();
+      startCountdown(3);
+      return;
+    }
+
+    // Обычный запуск — например, с ярлыка на рабочем столе: подключаемся к последнему приглашению.
+    // Если в адресе явно указана другая комната (?room=…), уважаем её и автозапуск не трогаем.
+    if (store.get('auto', '1') !== '0') {
+      const saved = readCode(store.get('invite', ''));
+      const urlRoom = (new URLSearchParams(location.search).get('room') || '').trim();
+      if (saved && (!urlRoom || urlRoom === saved.room) && applyInvite(saved)) {
+        startCountdown(2, 'Подключаемся к комнате «' + saved.room + '»');
+      }
+    }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initEntry);
+  else initEntry();
+})();

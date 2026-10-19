@@ -1,1 +1,30 @@
-# Volna
+# Секреты и машинозависимые файлы — никогда не коммитим
+voice-app/config.json
+voice-app/certs/
+voice-app/run/
+voice-app/livekit/livekit.yaml
+voice-app/public/addresses.json
+deploy/volna_deploy_key
+deploy/volna_deploy_key.pub
+*.pem
+*.key
+*.pid
+*.log
+
+# Зависимости и скачанные движки
+node_modules/
+voice-app/node_modules/
+voice-app/desktop/node_modules/
+voice-app/runtime/
+
+# Тяжёлые бинарники и сборки
+voice-app/livekit/livekit-server.exe
+*.zip
+*.tar.gz
+
+# Служебное
+.zwork/
+build/
+Thumbs.db
+desktop.ini
+.DS_Store
