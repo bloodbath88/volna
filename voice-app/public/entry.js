@@ -63,11 +63,22 @@
 
   function readCode(raw) {
     if (!raw) return null;
-    try {
-      const data = JSON.parse(b64uDecode(raw));
-      const room = data && typeof data === 'object' ? String(data.r || '').trim() : '';
-      if (room) return { room: room, key: String(data.k || '') };
-    } catch (e) { /* не наш формат — просто игнорируем */ }
+    // Ссылку часто пересылают с лишним пробелом, переводом строки, кавычками или точкой
+    // в конце — из-за такого «мусора» код раньше не разбирался, и человек видел
+    // требование пароля. Убираем хвосты и пробуем декодировать несколько раз.
+    let text = String(raw).trim();
+    try { text = decodeURIComponent(text); } catch (e) { /* уже без экранирования */ }
+    text = text.split('&')[0].split('#')[0];
+    text = text.replace(/[\s"'<>«»]+/g, '').replace(/[.,;:!?]+$/, '');
+    if (!text) return null;
+
+    for (const candidate of [text, text.replace(/-/g, '+').replace(/_/g, '/')]) {
+      try {
+        const data = JSON.parse(b64uDecode(candidate));
+        const room = data && typeof data === 'object' ? String(data.r || '').trim() : '';
+        if (room) return { room: room, key: String(data.k || '') };
+      } catch (e) { /* пробуем следующий вариант */ }
+    }
     return null;
   }
 

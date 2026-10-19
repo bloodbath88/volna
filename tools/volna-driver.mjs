@@ -1044,6 +1044,20 @@ async function main() {
       report.ok = !!(info && info.engineCfg && info.engineCfg.indexOf('stun.l.google.com') >= 0);
     }
 
+    if (scenario === 'invitespace') {
+      // так выглядит ссылка, если её скопировали из мессенджера вместе с пробелом,
+      // переводом строки и кавычками — приложение должно всё равно подключиться
+      const code = Buffer.from(JSON.stringify({ r: room, k: pass }), 'utf8').toString('base64url');
+      const messy = '%20%22' + code + '%20%22%0A';
+      await cdp.send('Page.navigate', { url: BASE + '/#i=' + messy });
+      await sleep(1500);
+      const s0 = await cdp.eval(SNAPSHOT, false);
+      step('ссылка с мусором на конце', { inviteBanner: s0.inviteBanner, passHidden: s0.passHidden, room: s0.roomInput });
+      const s = await waitFor(cdp, inRoom, 20000, 500);
+      step('подключение', { room: s.roomVisible, title: s.roomTitle, people: s.people });
+      report.ok = inRoom(s);
+    }
+
     if (scenario === 'badpass') {
       await open();
       await cdp.eval(setJoinFields(name, 'неверный-пароль-123', room), false);
