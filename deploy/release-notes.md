@@ -21,14 +21,14 @@
 
 | Файл | Для чего | Размер |
 |---|---|---|
-| `volna-voice-app.zip` | Windows-хост: распаковать и запустить `start.cmd` | 9,6 МБ |
+| `volna-voice-app.zip` | Windows-хост: распаковать и запустить `start.cmd` | 9,7 МБ |
 | `volna-voice-app-linux.tar.gz` | Linux-VPS: распаковать и запустить `sudo ./install-vps.sh` | 7,7 МБ |
 
 Контрольные суммы SHA-256:
 
 ```
-b82e5108981a333ebafe07d5ad519fa856dd5daa494a8ada1b4f0512650b72a7  volna-voice-app.zip
-b7da4c69d0b58f0e1a1b4ec28ea8c125738a71bf8b916fa711eb3c0275420e00  volna-voice-app-linux.tar.gz
+cbe724e5653573b1423cde54e2c66c67679553a4a2eb7977adc9c18c4d0ea915  volna-voice-app.zip
+5a4f1311c259aba443be48239b008746e9bdd909466751f0cee00507c7a9ac4d  volna-voice-app-linux.tar.gz
 ```
 
 ## Быстрый старт (Windows)

@@ -35,7 +35,9 @@ def collect():
             rel_base = ""
         keep_dirs = []
         for name in dirs:
-            if name in EXCLUDE_DIRS:
+            # служебные папки исключаем только в корне приложения: внутри node_modules
+            # бывают свои runtime/ и certs/, без них библиотеки не запускаются
+            if not rel_base and name in EXCLUDE_DIRS:
                 continue
             # библиотеки Electron весят сотни мегабайт — их скачивает install-desktop
             if name == "node_modules" and rel_base == "desktop":
