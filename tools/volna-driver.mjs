@@ -971,6 +971,70 @@ async function main() {
         inRoom(s2) && leftByBtn.joinVisible && !leftByBtn.roomVisible;
     }
 
+    if (scenario === 'stun') {
+      await open();
+      const cands = await cdp.eval(`(async () => {
+        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        const out = [];
+        pc.onicecandidate = (e) => { if (e.candidate) out.push(e.candidate.candidate); };
+        pc.createDataChannel('x');
+        await pc.setLocalDescription(await pc.createOffer());
+        await new Promise((r) => setTimeout(r, 6000));
+        pc.close();
+        return out;
+      })()`, true);
+      step('кандидаты Chrome со STUN', cands);
+      report.ok = Array.isArray(cands) && cands.some((c) => c.indexOf('typ srflx') >= 0);
+    }
+
+    if (scenario === 'icediag') {
+      await open();
+      await fill();
+      await cdp.eval(clickJoin, false);
+      await sleep(7000);
+      const info = await cdp.eval(`(() => {
+        const r = window.__volnaLastRoom;
+        const ice = document.documentElement.dataset.volnaIce || '';
+        const engine = r && r.engine ? r.engine : null;
+        let cfg = null;
+        try { cfg = engine && engine.rtcConfig ? engine.rtcConfig : null; } catch (e) { cfg = 'err'; }
+        return {
+          iceFromClient: ice,
+          engineCfg: cfg ? JSON.stringify(cfg) : 'нет',
+          connOptions: r && r.connOptions ? JSON.stringify(r.connOptions.rtcConfig || null) : 'нет',
+          state: r ? String(r.state) : 'нет комнаты',
+        };
+      })()`, false);
+      step('настройки ICE в клиенте', info);
+      const pcs = await cdp.eval(`(async () => {
+        const list = window.__volnaPCs || [];
+        const out = [];
+        for (const item of list) {
+          const cfg = item.pc.getConfiguration ? item.pc.getConfiguration() : {};
+          const stats = await item.pc.getStats();
+          const types = {};
+          const pairs = [];
+          const remote = [];
+          stats.forEach((v) => {
+            if (v.type === 'local-candidate') types[v.candidateType] = (types[v.candidateType] || 0) + 1;
+            if (v.type === 'remote-candidate') remote.push(v.candidateType + ' ' + v.address + ':' + v.port);
+            if (v.type === 'candidate-pair') pairs.push({ state: v.state, nom: v.nominated, sent: v.requestsSent, recv: v.requestsReceived });
+          });
+          out.push({
+            iceServers: JSON.stringify((cfg.iceServers || []).map((s) => s.urls)),
+            localTypes: types,
+            remoteCandidates: remote.slice(0, 6),
+            pairs: pairs.slice(0, 3),
+            connState: item.pc.connectionState,
+            iceState: item.pc.iceConnectionState,
+          });
+        }
+        return out;
+      })()`, true);
+      step('peer connections клиента', pcs);
+      report.ok = !!(info && info.engineCfg && info.engineCfg.indexOf('stun.l.google.com') >= 0);
+    }
+
     if (scenario === 'badpass') {
       await open();
       await cdp.eval(setJoinFields(name, 'неверный-пароль-123', room), false);

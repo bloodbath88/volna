@@ -1,14 +1,18 @@
 ﻿# «Волна» — ярлыки на рабочем столе Windows.
 #
-#   create-shortcut.cmd                             ярлык «Волна» и «Волна — остановить»
+#   create-shortcut.cmd                             ярлык «Волна»
 #   create-shortcut.cmd -InviteUrl "https://...#i=…" дополнительно «Волна — приглашение»
+#   create-shortcut.cmd -WithStop                   дополнительно «Волна — остановить» (аварийный)
 #   create-shortcut.cmd -Remove                     удалить созданные ярлыки
 #
 # Ярлык «Волна» запускает приложение (сервер + окно) без окна консоли.
 # Ярлык «Волна — приглашение» открывает ссылку-приглашение в отдельном окне: участнику
 # достаточно двойного клика — приложение подключится само.
+# Ярлык «Волна — остановить» — только для аварийного случая (сервер запущен в фоне
+# или приложение закрыли через диспетчер задач). В обычной работе он не нужен:
+# сервер останавливается сам при выходе, а вручную — меню «Волна → Остановить сервер».
 
-param([string]$InviteUrl = '', [switch]$Remove)
+param([string]$InviteUrl = '', [switch]$WithStop, [switch]$Remove)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -63,9 +67,9 @@ if ($useNative) {
   New-Lnk $lnkMain ('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $startPs + '" -Shortcut') 'Волна — голосовая связь'
 }
 
-# «Волна — остановить»
-if (Test-Path $stopPs) {
-  New-Lnk $lnkStop ('-NoProfile -ExecutionPolicy Bypass -File "' + $stopPs + '"') 'Волна — остановить приложение'
+# «Волна — остановить» — только по явной просьбе (-WithStop), без паузы и лишних окон
+if ((Test-Path $stopPs) -and $WithStop) {
+  New-Lnk $lnkStop ('-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $stopPs + '" -Quiet') 'Волна — остановить сервер (аварийно)'
 }
 
 if ($InviteUrl) {
@@ -80,7 +84,7 @@ if ($InviteUrl) {
 
 Write-Host ''
 Write-Host ('Ярлык создан: ' + $lnkMain) -ForegroundColor Green
-if (Test-Path $stopPs) { Write-Host ('Ярлык создан: ' + $lnkStop) -ForegroundColor Green }
+if ($WithStop) { Write-Host ('Ярлык создан: ' + $lnkStop) -ForegroundColor Green }
 if ($InviteUrl) {
   Write-Host ('Ярлык создан: ' + $lnkInvite) -ForegroundColor Green
   Write-Host ('Файл для отправки участнику: ' + $urlInvite) -ForegroundColor Green

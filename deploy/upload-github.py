@@ -29,12 +29,12 @@ BRANCH = os.environ.get("GH_BRANCH", "main").strip() or "main"
 MESSAGE = os.environ.get("GH_MESSAGE", "Волна: голосовая комната, стриминг и настольное приложение")
 API = "https://api.github.com"
 
-SKIP_DIRS = {"node_modules", ".zwork", "build", "runtime", ".git", "certs", "run", "tmp-certs"}
+SKIP_DIRS = {"node_modules", ".zwork", "build", "runtime", ".git", "certs", "run", "tmp-certs", "__pycache__"}
 SKIP_NAMES = {
     "config.json", "livekit.yaml", "addresses.json", "livekit-server.exe",
-    "volna_deploy_key", "volna_deploy_key.pub",
+    "volna_deploy_key", "volna_deploy_key.pub", "udp-mapping.txt", "DOMAIN.md",
 }
-SKIP_EXT = (".zip", ".tar.gz", ".log", ".pid", ".pem", ".key")
+SKIP_EXT = (".zip", ".tar.gz", ".log", ".pid", ".pem", ".key", ".pyc")
 SECRET_HINTS = ("config.json", "livekit.yaml", "addresses.json")
 
 
@@ -72,6 +72,9 @@ def collect():
             if name in SECRET_HINTS:
                 continue
             if rel.startswith((".zwork/", "build/")):
+                continue
+            # одноразовые скрипты работы с API доменного сервиса — не для публики
+            if rel.startswith("deploy/od-"):
                 continue
             with open(full, "rb") as fh:
                 files.append((rel, fh.read(), name.lower().endswith((".sh", ".cmd"))))

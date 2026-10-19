@@ -6,6 +6,8 @@
 #   -Shortcut     запуск с ярлыка: окно консоли скрыто, ошибки показываются в окошке
 #   -NoBrowser    не открывать окно приложения (режим сервера, автозапуск)
 #   -Room main    комната, в которую окно войдёт автоматически (по умолчанию main)
+#   -ParentPid N  номер процесса, который нас запустил (настольное приложение):
+#                 если он закроется, сервер остановится сам — «висящих» процессов не будет
 #
 # При первом запуске (нужен интернет только в этот раз):
 #   1) если Node.js не установлен — скачивается портативная версия в папку runtime
@@ -13,7 +15,7 @@
 #   3) если нет библиотек — выполняется установка зависимостей
 #   4) создаётся сертификат и конфигурация, запускаются серверы, открывается окно приложения
 
-param([switch]$NoBrowser, [switch]$Shortcut, [string]$Room = 'main')
+param([switch]$NoBrowser, [switch]$Shortcut, [string]$Room = 'main', [int]$ParentPid = 0)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -398,8 +400,47 @@ Say '  Приложение работает. Это окно не закрыв�
 Say '  Остановить: Ctrl+C, закрыть окно или запустить stop.cmd.' 'DarkGray'
 Say ''
 
+# Сторож: если нас зовёт не окно приложения (число не передали), определяем родителя сами.
+# Так работает и без правок в настольном приложении.
+if ($ParentPid -le 0) {
+  try {
+    $me = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $PID) -ErrorAction Stop
+    if ($me -and $me.ParentProcessId -gt 0) {
+      $parent = Get-Process -Id $me.ParentProcessId -ErrorAction SilentlyContinue
+      if ($parent -and @('electron', 'volna', 'Volna') -contains $parent.ProcessName) {
+        $ParentPid = [int]$parent.Id
+        Say ('  Слежу за окном приложения (pid ' + $ParentPid + ').') 'DarkGray'
+      }
+    }
+  } catch { }
+}
+
+# Отдельный сторож: сам супервизор может погибнуть вместе с окном приложения
+# (Electron закрывает дочерние процессы), а сторож запущен отдельно и останется,
+# чтобы остановить сервер и не оставить «висящих» процессов.
+if ($ParentPid -gt 0) {
+  try {
+    $watchScript = Join-Path $root 'watch-parent.ps1'
+    if (Test-Path $watchScript) {
+      Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $watchScript,
+        '-ParentPid', [string]$ParentPid, '-Root', $root
+      ) | Out-Null
+    }
+  } catch { }
+}
+
 try {
-  Wait-Process -Id $srv.Id
+  # Сторож: настольное приложение передаёт свой номер процесса. Если окно закрылось
+  # (в том числе аварийно, через диспетчер задач), сервер не должен остаться в фоне —
+  # иначе понадобился бы отдельный ярлык «остановить».
+  while (-not $srv.HasExited) {
+    if ($ParentPid -gt 0 -and -not (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue)) {
+      Say '  Окно приложения закрылось — останавливаю сервер.' 'DarkGray'
+      break
+    }
+    Start-Sleep -Milliseconds 1200
+  }
 } catch {
   # прервано пользователем
 } finally {

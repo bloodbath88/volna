@@ -80,6 +80,11 @@
   let lastScreenProfile = ''; // профиль, с которым запущена демонстрация экрана
   const rooms = new Set(); // все комнаты этого окна: лишние закрываем, даже если они ещё подключаются
 
+  // STUN-серверы: без них браузер не узнаёт свой внешний адрес и ICE через интернет не сходится.
+  const ICE_SERVERS = [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  ];
+
   function roomsMark() {
     try { document.documentElement.dataset.volnaRooms = String(rooms.size); } catch (e) { /* не критично */ }
   }
@@ -220,9 +225,15 @@
           });
         } catch (e) { /* не критично */ }
         const connect = this.connect.bind(this);
-        this.connect = async (...args) => {
+        this.connect = async (url, token, connectOpts) => {
+          // STUN нужен именно здесь: LiveKit берёт rtcConfig из опций connect(), а не из конструктора.
+          // Без него браузер сообщает только локальный адрес и через интернет не соединяется.
+          const opts = Object.assign({}, connectOpts || {});
+          if (!opts.rtcConfig || !opts.rtcConfig.iceServers) {
+            opts.rtcConfig = Object.assign({}, opts.rtcConfig || {}, { iceServers: ICE_SERVERS });
+          }
           try {
-            const res = await connect(...args);
+            const res = await connect(url, token, opts);
             active = this;
             guardParticipant(this);
             return res;

@@ -19,7 +19,7 @@ const { app, BrowserWindow, Menu, shell, dialog, desktopCapturer, session } = re
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 
 const DESKTOP_DIR = __dirname;
 const ROOT = path.dirname(DESKTOP_DIR);           // папка приложения (там server/, public/, config.json)
@@ -157,7 +157,7 @@ function runStartScript() {
     if (!fs.existsSync(script)) { resolve(false); return; }
     serverProc = spawn(
       'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-NoBrowser'],
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-NoBrowser', '-ParentPid', String(process.pid)],
       { cwd: ROOT, windowsHide: true, stdio: 'ignore' }
     );
     serverStartedByUs = true;
@@ -175,21 +175,35 @@ async function waitForServer(timeoutMs = 90000) {
   return false;
 }
 
+function killTree(pid) {
+  if (!pid || pid <= 0) return false;
+  try {
+    execFileSync('taskkill.exe', ['/T', '/F', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true });
+    return true;
+  } catch (e) {
+    try { process.kill(pid); return true; } catch (e2) { return false; }
+  }
+}
+
+/** Останавливает сервер, только если его запустили мы (при выходе приложения). */
 function stopServerIfOurs() {
   if (!serverStartedByUs) return;
   serverStartedByUs = false;
+  stopServer();
+}
+
+/** Остановить сервер и голосовое ядро: и при выходе, и по кнопке в меню. */
+function stopServer() {
   const runDir = path.join(ROOT, 'run');
-  const started = ['server.pid', 'livekit.pid'];
-  // Останавливаем сами процессы по pid-файлам: дочерний скрипт не успевает доделать
-  // работу, если Electron сразу завершается.
-  for (const name of started) {
+  for (const name of ['server.pid', 'livekit.pid']) {
     const pidFile = path.join(runDir, name);
     try {
       const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-      if (pid > 0) { try { process.kill(pid); } catch (e) { /* уже не работает */ } }
+      killTree(pid);
     } catch (e) { /* файла нет */ }
     try { fs.unlinkSync(pidFile); } catch (e) { /* уже удалён */ }
   }
+  if (serverProc && serverProc.pid) { killTree(serverProc.pid); serverProc = null; }
 }
 
 /* ─────────── окно ─────────── */
@@ -253,6 +267,26 @@ function buildMenu() {
         { label: 'Открыть папку приложения', click: () => shell.openPath(ROOT) },
         { label: 'Открыть папку журналов', click: () => shell.openPath(path.join(ROOT, 'run')) },
         { type: 'separator' },
+        {
+          // Обычно сервер останавливается сам при выходе. Эта кнопка — на случай,
+          // если он остался от прошлого запуска; она же заменяет ярлык «остановить».
+          label: 'Остановить сервер',
+          click: () => {
+            const answer = dialog.showMessageBoxSync(mainWindow, {
+              type: 'question',
+              title: 'Волна',
+              message: 'Остановить сервер «Волны»?',
+              detail: 'Окно приложения закроется. Запустить снова — ярлык «Волна».',
+              buttons: ['Остановить', 'Отмена'],
+              defaultId: 1,
+              cancelId: 1,
+            });
+            if (answer !== 0) return;
+            serverStartedByUs = true;   // останавливаем в любом случае: так решил человек
+            stopServer();
+            app.quit();
+          },
+        },
         { label: 'Выход', accelerator: 'Alt+F4', role: 'quit' },
       ],
     },
