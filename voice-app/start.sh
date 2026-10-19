@@ -135,6 +135,17 @@ fi
 # ── 4. Конфигурация и сертификат ──────────────────────────────
 "$NODE_EXE" "$ROOT/server/setup.js" >/dev/null
 
+# ── 4a. Внешний адрес для голосового ядра ────────────────────
+# На VPS публичный IP обычно приходит как /32 за NAT провайдера. В этом случае
+# рабочий вариант — use_external_ip: true (адрес определяется через STUN), а
+# node_ip нужно убрать: вместе они дают нерабочие ICE-кандидаты, и браузер
+# получает «could not establish pc connection». Проверено на живом сервере.
+LK_CFG="$ROOT/livekit/livekit.yaml"
+if [[ -f "$LK_CFG" ]]; then
+  sed -i 's/^ *use_external_ip:.*/  use_external_ip: true/' "$LK_CFG" 2>/dev/null || true
+  sed -i '/^ *node_ip:/d' "$LK_CFG" 2>/dev/null || true
+fi
+
 if [[ "$PROVISION" == "1" ]]; then
   say ''
   say '  Подготовка завершена: Node.js, голосовой сервер, библиотеки и конфигурация готовы.'

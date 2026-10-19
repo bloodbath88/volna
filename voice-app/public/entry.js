@@ -250,6 +250,13 @@
           if (!opts.rtcConfig || !opts.rtcConfig.iceServers) {
             opts.rtcConfig = Object.assign({}, opts.rtcConfig || {}, { iceServers: ICE_SERVERS });
           }
+          // ?relay=1 — весь звук идёт через TURN. Нужно там, где прямой путь невозможен:
+          // симметричный NAT, CGNAT, строгий корпоративный фаервол. Медленнее, но соединяется.
+          try {
+            if (/(?:^|[?&])relay=1(?:&|$)/.test(location.search)) {
+              opts.rtcConfig = Object.assign({}, opts.rtcConfig, { iceTransportPolicy: 'relay' });
+            }
+          } catch (e) { /* не критично */ }
           try {
             const res = await connect(url, token, opts);
             active = this;
