@@ -78,6 +78,7 @@
   let active = null;    // комната, в которой мы сейчас находимся
   let lastMicError = ''; // последняя причина, по которой не удалось включить микрофон
   let lastScreenProfile = ''; // профиль, с которым запущена демонстрация экрана
+  let inviteAutofilled = false; // пароль подставлен из ссылки-приглашения
   const rooms = new Set(); // все комнаты этого окна: лишние закрываем, даже если они ещё подключаются
 
   // STUN — чтобы браузер узнал свой внешний адрес; TURN — релей на нашем сервере,
@@ -241,9 +242,20 @@
           try {
             const res = await connect(url, token, opts);
             active = this;
+            inviteAutofilled = false;
             guardParticipant(this);
             return res;
           } catch (e) {
+            // Вход по ссылке не удался: чаще всего ссылку обрезали при пересылке
+            // и пароль в ней повреждён. Показываем поле пароля и говорим прямо.
+            if (inviteAutofilled) {
+              inviteAutofilled = false;
+              const field = $('#passField');
+              const keyInput = $('#passInput');
+              if (field) { field.classList.remove('hidden'); if (field.dataset) delete field.dataset.byInvite; }
+              if (keyInput) { keyInput.value = ''; try { keyInput.focus(); } catch (err) { /* не критично */ } }
+              toast('Вход по ссылке не удался: введите пароль комнаты вручную — возможно, ссылка обрезалась при пересылке', 'error');
+            }
             closeRoom(this); // неудачная попытка не оставляет «призрачного» подключения
             throw e;
           }
@@ -360,6 +372,7 @@
   /** Заполняет поля входа данными приглашения. */
   function applyInvite(inv) {
     if (!inv || !inv.room || !onJoinScreen()) return false;
+    inviteAutofilled = !!inv.key;
     const roomInput = $('#roomInput');
     const keyInput = $('#passInput');
     const nameInput = $('#nameInput');

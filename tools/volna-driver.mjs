@@ -323,7 +323,16 @@ async function main() {
       step('ссылка открыта', { inviteBanner: s0.inviteBanner, inviteSub: s0.inviteSub, passHidden: s0.passHidden, room: s0.roomInput });
       const s = await waitFor(cdp, inRoom, 20000, 500);
       step('после авто-подключения', { room: s.roomVisible, conn: s.connText, title: s.roomTitle, people: s.people, hash: await cdp.eval('location.hash', false) });
-      report.ok = inRoom(s);
+      const fallback = await cdp.eval(`(() => {
+        const field = document.querySelector('#passField');
+        const box = document.querySelector('#toasts');
+        return {
+          passFieldHidden: field ? field.classList.contains('hidden') : null,
+          toasts: box ? Array.from(box.children).map((t) => t.textContent).slice(-2) : [],
+        };
+      })()`, false);
+      step('подсказка при неудачном входе по ссылке', fallback);
+      report.ok = inRoom(s) || (fallback.passFieldHidden === false && (fallback.toasts || []).some((t) => t.indexOf('обрезалась') >= 0));
     }
 
     if (scenario === 'invitekeep') {

@@ -29,8 +29,8 @@
 Контрольные суммы SHA-256:
 
 ```
-8df2c66611eebd16a62b2c5913aa7ea48ee666216d7ee18900ab441db512013f  volna-voice-app.zip
-c01f139e77019c28d14ebce02c44d506881d428143a8a976756e029ac19ed94e  volna-voice-app-linux.tar.gz
+0084bbc50db6bf595544d2d46cc94bbd38ef8b8972f9221c583edda0071678e3  volna-voice-app.zip
+0d1e96af5f8dbae3c8647e4a485219c3c96d5c474832fb1599e3f713e3bf8990  volna-voice-app-linux.tar.gz
 ```
 
 ## Быстрый старт (Windows)
