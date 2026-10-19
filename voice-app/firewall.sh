@@ -20,6 +20,8 @@ ufw allow 7881/tcp comment 'Volna media TCP'
 ufw allow 7882:7892/udp comment 'Volna media UDP'
 ufw allow 443/tcp comment 'Volna TURN/TLS'
 ufw allow 3478/udp comment 'Volna TURN'
+ufw allow 3478/tcp comment 'Volna TURN'
+ufw allow 50000:51000/udp comment 'Volna TURN relay'
 
 # Если файрвол ещё выключен — включаем, но сначала обязательно разрешаем SSH,
 # иначе можно потерять доступ к серверу.

@@ -80,9 +80,15 @@
   let lastScreenProfile = ''; // профиль, с которым запущена демонстрация экрана
   const rooms = new Set(); // все комнаты этого окна: лишние закрываем, даже если они ещё подключаются
 
-  // STUN-серверы: без них браузер не узнаёт свой внешний адрес и ICE через интернет не сходится.
+  // STUN — чтобы браузер узнал свой внешний адрес; TURN — релей на нашем сервере,
+  // нужен тем, кто за симметричным NAT или CGNAT (прямое соединение там невозможно).
   const ICE_SERVERS = [
     { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+    {
+      urls: 'turn:31.76.29.68:3478?transport=udp',
+      username: 'volna',
+      credential: 'volna-l8sXqyK15MTc',
+    },
   ];
 
   function roomsMark() {

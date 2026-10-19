@@ -33,6 +33,7 @@ SKIP_DIRS = {"node_modules", ".zwork", "build", "runtime", ".git", "certs", "run
 SKIP_NAMES = {
     "config.json", "livekit.yaml", "addresses.json", "livekit-server.exe",
     "volna_deploy_key", "volna_deploy_key.pub", "udp-mapping.txt", "DOMAIN.md",
+    "turnserver.conf",
 }
 SKIP_EXT = (".zip", ".tar.gz", ".log", ".pid", ".pem", ".key", ".pyc")
 SECRET_HINTS = ("config.json", "livekit.yaml", "addresses.json")
