@@ -272,6 +272,9 @@
           on(LK.RoomEvent.ParticipantConnected, (p) => {
             if (this.__volnaClosed || latest !== this) return;
             chatAdd((p && p.name ? p.name : 'Участник') + ' подключился', '', 'sys');
+            if (p && p.name && myName() && String(p.name).toLowerCase() === myName().toLowerCase()) {
+              toast('В комнате уже есть участник с таким именем: ' + p.name, 'error');
+            }
             beep('in');
           });
           on(LK.RoomEvent.ParticipantDisconnected, (p) => {
@@ -298,6 +301,10 @@
           try {
             const res = await connect(url, token, opts);
             active = this;
+            LOCK.busy = true;
+            lockRefresh();
+            if (LOCK.timer) clearInterval(LOCK.timer);
+            LOCK.timer = setInterval(lockRefresh, 5000);
             inviteAutofilled = false;
             guardParticipant(this);
             beep('join');
@@ -320,7 +327,12 @@
         const disconnect = this.disconnect.bind(this);
         this.disconnect = (...args) => {
           this.__volnaClosed = true;
-          if (active === this) active = null;
+          if (active === this) {
+            active = null;
+            LOCK.busy = false;
+            if (LOCK.timer) { clearInterval(LOCK.timer); LOCK.timer = 0; }
+            lockRelease();
+          }
           rooms.delete(this);
           roomsMark();
           return disconnect(...args);
@@ -504,7 +516,70 @@
     IB.timer = setInterval(tick, 1000);
   }
 
+  /* ---- 3a. Один пользователь — одно окно ---- */
+
+  const LOCK = { id: Math.random().toString(36).slice(2), channel: null, busy: false };
+
+  function initSessionLock() {
+    try {
+      LOCK.channel = new BroadcastChannel('volna-session');
+      LOCK.channel.onmessage = (e) => {
+        const msg = e.data || {};
+        if ((msg.t === 'claim' || msg.t === 'ping') && LOCK.busy) {
+          LOCK.channel.postMessage({ t: 'busy', id: LOCK.id });
+        }
+      };
+    } catch (e) { /* старые браузеры — без блокировки */ }
+  }
+
+  function otherTabBusy() {
+    // Источник правды — localStorage: его видят все вкладки одного браузера.
+    // Метка живёт 15 секунд и обновляется, пока идёт звонок.
+    if (window.__volnaAllowMulti) return false;
+    try {
+      const raw = localStorage.getItem('volna.lock');
+      if (raw) {
+        const info = JSON.parse(raw);
+        if (info && info.id !== LOCK.id && Date.now() - Number(info.at || 0) < 15000) return true;
+      }
+      localStorage.setItem('volna.lock', JSON.stringify({ id: LOCK.id, at: Date.now() }));
+    } catch (e) { /* приватный режим — не блокируем */ }
+    return false;
+  }
+
+  function blockSecondWindow() {
+    toast('Вы уже в комнате в другой вкладке этого браузера', 'error');
+    const hint = $('#joinHint');
+    if (hint) hint.textContent = 'Вы уже в комнате в другой вкладке — закройте её, чтобы войти здесь.';
+  }
+
+  /** Перехватываем нажатие «Войти» до обработчика app.js: второе окно не пускаем. */
+  function guardMultiJoin() {
+    document.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest('#joinBtn') : null;
+      if (!btn) return;
+      if (!otherTabBusy()) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      blockSecondWindow();
+    }, true);
+  }
+
+  function lockRefresh() {
+    try { localStorage.setItem('volna.lock', JSON.stringify({ id: LOCK.id, at: Date.now() })); } catch (e) { /* не критично */ }
+  }
+
+  function lockRelease() {
+    try {
+      const raw = localStorage.getItem('volna.lock');
+      if (!raw) return;
+      const info = JSON.parse(raw);
+      if (info && info.id === LOCK.id) localStorage.removeItem('volna.lock');
+    } catch (e) { /* не критично */ }
+  }
+
   function doJoin() {
+    if (otherTabBusy()) { blockSecondWindow(); return; }
     const roomInput = $('#roomInput');
     if (roomInput) setRealRoom(roomInput.value);
     const btn = $('#joinBtn');
@@ -1935,24 +2010,10 @@
     rows.forEach((r) => {
       const row = document.createElement('div');
       row.className = 'chan-row' + (r.current ? ' current' : '') + (r.main ? '' : ' sub');
-      const mark = document.createElement('span');
-      mark.className = 'hash';
-      mark.textContent = r.main ? '▣' : '└';
       const label = document.createElement('span');
       label.className = 'chan-name';
       label.textContent = shortName(r.id);
-      const edit = document.createElement('button');
-      edit.type = 'button';
-      edit.className = 'chan-edit';
-      edit.title = 'Переименовать';
-      edit.textContent = '✎';
-      edit.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const next = window.prompt('Новое название комнаты', displayName(r.id));
-        if (next == null) return;
-        setRoomAlias(r.id, String(next).trim());
-      });
-      row.append(mark, label);
+      row.append(label);
       if (r.main) {
         const add = document.createElement('button');
         add.type = 'button';
@@ -1961,15 +2022,41 @@
         add.textContent = '+';
         add.addEventListener('click', (e) => { e.stopPropagation(); openNewRoomInput(); });
         row.append(add);
+        row.title = 'Общая комната';
+      } else {
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'chan-edit';
+        edit.title = 'Переименовать';
+        edit.textContent = '✎';
+        edit.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const next = window.prompt('Новое название комнаты', displayName(r.id));
+          if (next == null) return;
+          setRoomAlias(r.id, String(next).trim());
+        });
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'chan-del';
+        del.title = 'Удалить подкомнату';
+        del.textContent = '✕';
+        del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const parent = parentOf(r.id);
+          const name = String(r.id).split(SUB_SEP).pop();
+          removeSub(parent, name);
+          if (currentRoom() === r.id) switchToRoom(parent);
+        });
+        row.append(edit, del);
+        row.title = 'Подкомната — свой звук и свой чат';
+        // двойной клик — тоже переименование
+        row.addEventListener('dblclick', (e) => {
+          e.preventDefault();
+          const next = window.prompt('Новое название комнаты', displayName(r.id));
+          if (next != null) setRoomAlias(r.id, String(next).trim());
+        });
       }
-      if (!r.main) row.append(edit);
-      row.title = r.main ? 'Общая комната' : 'Подкомната: свой звук и свой чат';
       row.addEventListener('click', () => switchToRoom(r.id));
-      row.addEventListener('dblclick', (e) => {
-        e.preventDefault();
-        const next = window.prompt('Новое название комнаты', displayName(r.id));
-        if (next != null) setRoomAlias(r.id, String(next).trim());
-      });
       box.append(row);
     });
 
@@ -2114,6 +2201,8 @@
       }
     } catch (e) { /* не критично */ }
     watchJoinScreen();
+    initSessionLock();
+    guardMultiJoin();
     guardDoubleJoin();
     bindBanner();
     bindInviteButton();

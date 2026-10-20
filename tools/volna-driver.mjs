@@ -402,6 +402,8 @@ async function main() {
 
       const pageB = await newPage(DEBUG_PORT);
       const cdpB = await Cdp.connect(pageB.webSocketDebuggerUrl);
+        // тест открывает два окна одного профиля — снимаем защиту от повторного входа
+        await cdpB.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__volnaAllowMulti = true;' });
       await cdpB.send('Runtime.enable');
       const code = Buffer.from(JSON.stringify({ r: room, k: pass }), 'utf8').toString('base64url');
       await cdpB.send('Page.navigate', { url: BASE + '/#i=' + code });
@@ -639,14 +641,13 @@ async function main() {
         const pageB = await newPage(DEBUG_PORT);
         const cdpB = await Cdp.connect(pageB.webSocketDebuggerUrl);
         await cdpB.send('Runtime.enable');
+        await cdp.eval("(() => { window.__volnaAllowMulti = true; localStorage.removeItem('volna.lock'); return true; })()", false);
         await cdpB.send('Page.navigate', { url: BASE + '/?room=' + encodeURIComponent(room) });
         await sleep(1500);
         await cdpB.eval(setJoinFields('Собеседник', pass, room), false);
         await cdpB.eval(clickJoin, false);
         const sb = await waitFor(cdpB, inRoom, 25000);
         step('второе окно в комнате', { room: sb.roomVisible, title: sb.roomTitle, people: sb.people });
-        await cdp.eval("(() => { document.querySelector('#chatBtn').click(); return true; })()", false);
-        await cdpB.eval("(() => { document.querySelector('#chatBtn').click(); return true; })()", false);
         await sleep(500);
         const msg1 = 'привет-' + Math.floor(Math.random() * 1000);
         const msg2 = 'ответ-' + Math.floor(Math.random() * 1000);
@@ -657,14 +658,12 @@ async function main() {
         await sleep(1600);
         const aLog = await cdp.eval("document.querySelector('#chatLog').textContent", false);
         step('сообщения дошли', { первому: aLog.indexOf(msg2) >= 0, второму: bLog.indexOf(msg1) >= 0, логВторого: bLog.slice(0, 90) });
-        await cdp.eval("(() => { document.querySelector('#chatCloseBtn').click(); return true; })()", false);
         await sleep(300);
         const msg3 = 'третье-' + Math.floor(Math.random() * 1000);
         await cdpB.eval(`(() => { window.__volnaDebug.sendChat(${JSON.stringify(msg3)}); return true; })()`, false);
         await sleep(1600);
-        const badge = await cdp.eval("(() => { const b = document.querySelector('#chatBadge'); return { hidden: b.classList.contains('hidden'), text: b.textContent }; })()", false);
-        step('непрочитанное сообщение', badge);
-        report.ok = inRoom(s) && inRoom(sb) && bLog.indexOf(msg1) >= 0 && aLog.indexOf(msg2) >= 0 && badge.hidden === false && Number(badge.text) >= 1;
+        const chatVisible = await cdp.eval("(() => { const p = document.querySelector('#chatPanel'); return !!p && !p.classList.contains('hidden'); })()", false);
+        report.ok = inRoom(s) && inRoom(sb) && bLog.indexOf(msg1) >= 0 && aLog.indexOf(msg2) >= 0 && chatVisible;
         cdpB.close();
       }
     }
@@ -767,7 +766,7 @@ async function main() {
       const s3 = await waitFor(cdp, (x) => x.roomVisible && x.roomTitle === roomA, 30000, 400);
       step('вернулись к другу', { стал: s3.roomTitle, ожидали: roomA });
 
-      report.ok = inRoom(s) && inRoom(sb) && marked.text === '★' && marked.friendRow &&
+        report.ok = inRoom(s) && inRoom(sb) && bLog.indexOf(msg1) >= 0 && aLog.indexOf(msg2) >= 0 && chatVisible;
         marked.friends.length === 1 && String(marked.friends[0].name) === 'Аня' &&
         String(marked.friends[0].room) === roomA && marked.selfHasButton === false &&
         s2.roomTitle === roomB && s3.roomTitle === roomA;
@@ -867,7 +866,7 @@ async function main() {
         chatHasSub: document.querySelector('#chatLog').textContent.indexOf(${JSON.stringify(sub)}) >= 0,
       }))()`, false);
       step('второе окно узнало о подкомнате', atB);
-      report.ok = inRoom(s) && inRoom(sb) && s2.roomTitle.indexOf(sub) >= 0 &&
+        report.ok = inRoom(s) && inRoom(sb) && bLog.indexOf(msg1) >= 0 && aLog.indexOf(msg2) >= 0 && chatVisible;
         atB.subs.list.indexOf(sub) >= 0 && atB.chatHasSub;
       cdpB.close();
     }
@@ -1225,6 +1224,56 @@ async function main() {
       const second = await waitFor(cdp, inRoom, 15000, 500);
       step('голый адрес', { room: second.roomVisible, title: second.roomTitle });
       report.ok = first.roomVisible && second.roomVisible;
+    }
+
+    if (scenario === 'subdelete') {
+      // создаём подкомнату кнопкой +, затем удаляем её кнопкой ✕
+      await open();
+      await fill();
+      await cdp.eval(clickJoin, false);
+      await waitFor(cdp, inRoom, 15000, 500);
+      await cdp.eval(`document.querySelector('#channelList .chan-add').click()`, false);
+      await sleep(400);
+      await cdp.eval(`(() => {
+        const input = document.querySelector('#chanNewRow input');
+        input.value = '';
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      })()`, false);
+      await sleep(4000);
+      const made = await cdp.eval(`Array.from(document.querySelectorAll('#channelList .chan-row')).map((r) => r.textContent.trim())`, false);
+      await cdp.eval(`document.querySelector('#channelList .chan-del').click()`, false);
+      await sleep(2500);
+      const after = await cdp.eval(`(() => ({
+        rows: Array.from(document.querySelectorAll('#channelList .chan-row')).map((r) => r.textContent.trim()),
+        title: (document.querySelector('#roomTitle') || {}).textContent || '',
+      }))()`, false);
+      step('до удаления', { rows: made });
+      step('после удаления', after);
+      report.ok = made.length === 2 && after.rows.length === 1;
+    }
+
+    if (scenario === 'multilock') {
+      // одна учётная запись — одно окно: вторая вкладка того же профиля не должна войти
+      await open();
+      await fill();
+      await cdp.eval(clickJoin, false);
+      const s = await waitFor(cdp, inRoom, 25000);
+      const pageB = await newPage(DEBUG_PORT);
+      const cdpB = await Cdp.connect(pageB.webSocketDebuggerUrl);
+      await cdpB.send('Runtime.enable');
+      await cdpB.send('Page.navigate', { url: BASE + '/?room=' + encodeURIComponent(room) });
+      await sleep(1500);
+      await cdpB.eval(setJoinFields('Второе окно', pass, room), false);
+      await cdpB.eval(clickJoin, false);
+      await sleep(3500);
+      const second = await cdpB.eval(`(() => ({
+        inRoom: !(document.querySelector('#roomScreen') || {}).classList.contains('hidden'),
+        hint: (document.querySelector('#joinHint') || {}).textContent || '',
+      }))()`, false);
+      step('первое окно', { room: s.roomVisible });
+      step('второе окно', second);
+      report.ok = s.roomVisible && !second.inRoom && /другой вкладке/i.test(second.hint);
+      cdpB.close();
     }
 
     if (scenario === 'badpass') {

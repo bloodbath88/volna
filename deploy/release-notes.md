@@ -1,4 +1,4 @@
-# Volna 1.3.1 — Night Stalker sign-in artwork
+# Volna 1.4.0 — heroes backdrop, fog animation, one window per user
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
@@ -105,8 +105,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-28d140b25020245adf1ea1874546308cd92a6b0283ba2b4fd00ece2e88136c68  volna-voice-app.zip
-c24e113dc94979b6d8061b42df91f8ddb439d24031912d3d66ffc6976f04b3e6  volna-voice-app-linux.tar.gz
+7da819de2a902411e4dc6bdaa29845c7b2bd96b43eb480b86f1af5159f60f1b5  volna-voice-app.zip
+60b29be4bfd9d824436bfa220bd6ed75e0e7c8a6ff3873c5e59c318cef2878e5  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)
