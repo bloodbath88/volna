@@ -45,7 +45,16 @@ button,input,select{font:inherit;color:inherit}
 
 /* ─────────── вход ─────────── */
 
-.join{min-height:100dvh;display:grid;place-items:center;padding:24px}
+.join{
+  min-height:100dvh;display:grid;place-items:center;padding:24px;
+  /* арт экрана входа: фигура справа, слева затемнено под карточку */
+  background:
+    linear-gradient(90deg, rgba(4,6,4,.94) 0%, rgba(4,6,4,.78) 40%, rgba(4,6,4,.22) 68%, rgba(4,6,4,.55) 100%),
+    url('bg/nightstalker.jpg') right center/cover no-repeat;
+}
+@media (min-width:1000px){
+  .join{justify-items:start;padding-left:max(32px, 9vw)}
+}
 .join-card{
   width:min(520px,100%);display:grid;gap:16px;padding:26px;
   background:linear-gradient(180deg,rgba(255,255,255,.03),transparent 45%),rgba(10,14,10,.76);

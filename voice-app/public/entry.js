@@ -2149,6 +2149,15 @@
       return;
     }
 
+    // Чистый вход по адресу без приглашения: убираем следы прошлой неудачной авто-попытки
+    setTimeout(() => {
+      if (inviteFromLocation()) return;
+      if (readCode(store.get('invite', ''))) return;
+      const hint = $('#joinHint');
+      if (hint && /пароль|не удалось/i.test(hint.textContent || '')) hint.textContent = '';
+      document.querySelectorAll('#toasts .toast.error').forEach((t) => t.remove());
+    }, 1800);
+
     // Обычный запуск — например, с ярлыка на рабочем столе: подключаемся к последнему приглашению.
     // Если в адресе явно указана другая комната (?room=…), уважаем её и автозапуск не трогаем.
     if (store.get('auto', '1') !== '0') {
