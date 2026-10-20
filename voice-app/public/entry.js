@@ -658,27 +658,28 @@
   /* ---- 6.0. Звуковые сигналы и плавный переход между комнатами ---- */
 
   let AC = null;
-  /** Короткий сигнал: вход в комнату, участник зашёл или вышел. */
+  /** Сигнал в духе Discord: два коротких чистых тона вверх при входе, один вниз при выходе. */
   function beep(kind) {
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
       AC = AC || new Ctx();
       if (AC.state === 'suspended') AC.resume();
-      const now = AC.currentTime;
-      const osc = AC.createOscillator();
-      const gain = AC.createGain();
-      const base = kind === 'out' ? 380 : kind === 'in' ? 640 : 520;
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(base, now);
-      osc.frequency.exponentialRampToValueAtTime(base * (kind === 'out' ? 0.72 : 1.26), now + 0.16);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.14, now + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-      osc.connect(gain);
-      gain.connect(AC.destination);
-      osc.start(now);
-      osc.stop(now + 0.24);
+      const notes = kind === 'out' ? [[420, 0]] : [[659, 0], [988, 0.085]];
+      notes.forEach(([freq, delay]) => {
+        const start = AC.currentTime + delay;
+        const osc = AC.createOscillator();
+        const gain = AC.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.11, start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+        osc.connect(gain);
+        gain.connect(AC.destination);
+        osc.start(start);
+        osc.stop(start + 0.14);
+      });
     } catch (e) { /* звук не критичен */ }
   }
 
@@ -1868,6 +1869,8 @@
     if (isSubRoom(id)) {
       const parent = parentOf(id);
       const name = String(id).split(SUB_SEP).pop();
+      // своё имя — показываем сразу; служебное — нумеруем по порядку
+      if (!/^subroom(-\d+)?$/.test(name)) return name;
       const index = subsOf(parent).indexOf(name);
       return 'Subroom ' + (index >= 0 ? index + 1 : 1);
     }
@@ -1946,6 +1949,15 @@
         setRoomAlias(r.id, String(next).trim());
       });
       row.append(mark, label);
+      if (r.main) {
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'chan-add';
+        add.title = 'Создать подкомнату';
+        add.textContent = '+';
+        add.addEventListener('click', (e) => { e.stopPropagation(); openNewRoomInput(); });
+        row.append(add);
+      }
       if (!r.main) row.append(edit);
       row.title = r.main ? 'Общая комната' : 'Подкомната: свой звук и свой чат';
       row.addEventListener('click', () => switchToRoom(r.id));
@@ -1959,6 +1971,8 @@
 
     const title = $('#chanRoomName');
     if (title) title.textContent = shortName(here);
+
+    // старой строки с названием больше нет — ничего не обновляем
   }
 
   function renderSubs() {

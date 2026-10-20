@@ -1119,7 +1119,7 @@ async function main() {
         rows: Array.from(document.querySelectorAll('#channelList .chan-row')).map((r) => r.textContent.trim()),
         title: (document.querySelector('#roomTitle') || {}).textContent || '',
       }))()`, false);
-      await cdp.eval(`document.querySelector('[data-volna-action="new-room"]').click()`, false);
+      await cdp.eval(`document.querySelector('#channelList .chan-add').click()`, false);
       await sleep(400);
       const editing = await cdp.eval(`(() => ({
         hasInput: !!document.querySelector('#chanNewRow input'),
@@ -1147,10 +1147,25 @@ async function main() {
         chatVisible: !(document.querySelector('#chatPanel') || {}).classList.contains('hidden'),
       }))()`, false);
       after.seenJoin = seenJoin;
+
+      // второй проход: создаём комнату со своим названием — имя должно примениться сразу
+      await cdp.eval(`document.querySelector('#channelList .chan-add').click()`, false);
+      await sleep(400);
+      await cdp.eval(`(() => {
+        const input = document.querySelector('#chanNewRow input');
+        input.value = 'Моя комната';
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      })()`, false);
+      await sleep(4000);
+      const named = await cdp.eval(`(() => ({
+        rows: Array.from(document.querySelectorAll('#channelList .chan-row')).map((r) => r.textContent.trim()),
+        chatTitle: (document.querySelector('#chatTitle') || {}).textContent || '',
+      }))()`, false);
+      step('комната со своим именем', named);
       step('до создания', before);
       step('поле ввода', editing);
       step('после создания', after);
-      report.ok = !!editing.hasInput && after.rows.length === 2 && after.rows[1].indexOf('Subroom 1') >= 0 && after.title === 'Volna' && !seenJoin && after.chatVisible;
+      report.ok = !!editing.hasInput && after.rows.length === 2 && after.rows[1].indexOf('Subroom 1') >= 0 && after.title === 'Volna' && !seenJoin && after.chatVisible && named.rows.length === 3 && named.chatTitle.indexOf('о') >= 0;
     }
 
     if (scenario === 'screenshare') {

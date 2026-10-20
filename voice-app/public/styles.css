@@ -126,6 +126,8 @@ button,input,select{font:inherit;color:inherit}
 .switch-overlay.hidden{display:none}
 .chan-row.editing{background:var(--panel2);border-color:var(--line2);padding:3px 6px}
 .chan-input{flex:1 1 auto;min-width:0;background:transparent;border:0;outline:none;color:var(--text);font:13px var(--font-ui)}
+.chan-add{margin-left:auto;width:22px;height:22px;display:grid;place-items:center;border:0;background:transparent;color:var(--muted);font:16px/1 var(--font-ui);cursor:pointer;border-radius:6px;transition:color .12s,background .12s}
+.chan-add:hover{color:var(--accent);background:var(--panel2)}
 .chan-row .hash{opacity:.7;font-size:13px;width:14px;text-align:center}
 .chan-row .who-count{margin-left:auto;font-size:11.5px;color:var(--muted)}
 .topbar{
@@ -325,8 +327,8 @@ button,input,select{font:inherit;color:inherit}
 #chatBtn .badge{margin-left:7px}
 
 .chat-panel{
-  position:static;width:min(760px,100%);margin:auto auto 0;
-  padding:10px 0 0;border:0;border-top:1px solid rgba(142,255,3,.10);border-radius:0;
+  position:static;width:100%;margin:auto 0 0;padding:10px 0 0;
+  border:0;border-top:1px solid rgba(142,255,3,.10);border-radius:0;
   background:linear-gradient(180deg,rgba(8,11,8,0),rgba(8,11,8,.42));
   backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none;
   display:flex;flex-direction:column;gap:6px;flex:0 1 auto;min-height:0;max-height:44%;
@@ -378,3 +380,11 @@ button,input,select{font:inherit;color:inherit}
   .join-card{padding:20px}
   .row2{grid-template-columns:1fr}
 }
+
+/* аккуратные полосы прокрутки вместо системных */
+*{scrollbar-width:thin;scrollbar-color:rgba(142,255,3,.35) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(142,255,3,.28);border-radius:999px;border:3px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(142,255,3,.5)}
+::-webkit-scrollbar-corner{background:transparent}
