@@ -208,11 +208,36 @@
       }
       const pub = Object.assign({}, publish || {}, {
         screenShareEncoding: { maxBitrate: profile.bitrate, maxFramerate: profile.res.frameRate },
+        // Слои симулкаста: зритель сам выберет 720p/1080p/1440p в зависимости от экрана и канала
+        screenShareSimulcastLayers: [
+          { width: 1280, height: 720, encoding: { maxBitrate: 1500000, maxFramerate: 30 } },
+          { width: 1920, height: 1080, encoding: { maxBitrate: 3500000, maxFramerate: 60 } },
+          { width: 2560, height: 1440, encoding: { maxBitrate: 6000000, maxFramerate: 60 } },
+        ],
         degradationPreference: profile.degrade || 'maintain-resolution',
       });
       lastScreenProfile = profile.label;
       toast('Показ экрана: ' + profile.label);
-      return setScreen(on, cap, pub);
+      try {
+        return await setScreen(on, cap, pub);
+      } catch (e) {
+        // Запасные варианты: браузер или сервер могут не принять симулкаст/системный звук.
+        // Тогда показываем экран простым способом — главное, чтобы демонстрация включилась.
+        try {
+          const simple = Object.assign({}, pub);
+          delete simple.screenShareSimulcastLayers;
+          return await setScreen(on, cap, simple);
+        } catch (e2) {
+          if (cap.audio) {
+            const simpleNoAudio = Object.assign({}, pub, { audio: false });
+            delete simpleNoAudio.screenShareSimulcastLayers;
+            toast('Системный звук недоступен — показываю без него');
+            return await setScreen(on, Object.assign({}, cap, { audio: false }), simpleNoAudio);
+          }
+          toast('Не удалось включить демонстрацию: ' + ((e && e.message) || e), 'error');
+          throw e;
+        }
+      }
     };
   }
 
@@ -376,7 +401,7 @@
         if (hint) hint.textContent = '';
         // имя комнаты для человека: подкомната и текстовая комната выглядят понятно
         const title = $('#roomTitle');
-        if (title) title.textContent = shortName(currentRoom());
+        if (title) title.textContent = 'Volna';
         // В чате сразу видно, чей он: общей комнаты или конкретной подкомнаты
         const chatTitle = $('#chatTitle');
         if (chatTitle) {
@@ -672,6 +697,45 @@
     el.classList.toggle('hidden', !on);
     clearTimeout(SWITCH.timer);
     if (on) SWITCH.timer = setTimeout(() => switchOverlay(false), 9000);
+  }
+
+  /* ---- 6.1a. Счётчик участников без постоянного «до N» ---- */
+
+  const CAP = { max: 0 };
+
+  function pluralPeople(n) {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'участник';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'участника';
+    return 'участников';
+  }
+
+  /** В шапке только число людей; о лимите говорим лишь когда он достигнут. */
+  function tidyRoomMeta() {
+    const el = $('#roomMeta');
+    if (!el) return;
+    const text = String(el.textContent || '');
+    const found = text.match(/(\d+)/);
+    if (!found) return;
+    const count = Number(found[1]);
+    let short = count + ' ' + pluralPeople(count);
+    if (CAP.max && count >= CAP.max) short += ' · комната заполнена';
+    if (text !== short) el.textContent = short;
+  }
+
+  function watchRoomMeta() {
+    try {
+      fetch('/api/config').then((r) => r.json()).then((cfg) => {
+        CAP.max = Number(cfg && cfg.maxParticipants) || 0;
+        tidyRoomMeta();
+      }).catch(() => undefined);
+    } catch (e) { /* не критично */ }
+
+    const el = $('#roomMeta');
+    if (!el || !('MutationObserver' in window)) return;
+    new MutationObserver(tidyRoomMeta).observe(el, { childList: true, characterData: true, subtree: true });
+    tidyRoomMeta();
   }
 
   /* ---- 6.1. Имя хоста: на машине с сервером по умолчанию «Admin» ---- */
@@ -1292,6 +1356,7 @@
       img.alt = String(name || '');
       img.className = 'chat-img';
       img.loading = 'lazy';
+      img.title = 'Двойной клик — открыть крупно';
       row.append(img);
     }
     // ссылка живёт, пока открыт чат; освобождаем при закрытии вкладки
@@ -1402,6 +1467,54 @@
     }
   }
 
+
+  /* ---- 6.6b. Увеличение картинок по двойному клику ---- */
+
+  function openLightbox(src, alt) {
+    let box = document.getElementById('lightbox');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'lightbox';
+      box.className = 'lightbox hidden';
+      box.innerHTML = '<img alt=""><button class="lightbox-close" type="button" aria-label="Закрыть">✕</button>';
+      document.body.append(box);
+      box.addEventListener('click', (e) => {
+        const target = e.target;
+        if (target === box || (target.classList && target.classList.contains('lightbox-close'))) {
+          box.classList.add('hidden');
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') box.classList.add('hidden');
+      });
+    }
+    const img = box.querySelector('img');
+    if (img) {
+      img.src = src;
+      img.alt = alt || '';
+    }
+    box.classList.remove('hidden');
+  }
+
+  function bindZoom() {
+    // Картинки в чате — во весь экран; демонстрация экрана — двойной клик на полноэкранный режим
+    document.addEventListener('dblclick', (e) => {
+      const img = e.target && e.target.closest ? e.target.closest('.chat-img') : null;
+      if (img && img.src) {
+        e.preventDefault();
+        openLightbox(img.src, img.alt);
+        return;
+      }
+      const stage = e.target && e.target.closest ? e.target.closest('#stageVideo') : null;
+      if (stage) {
+        e.preventDefault();
+        try {
+          if (document.fullscreenElement) document.exitFullscreen();
+          else if (stage.requestFullscreen) stage.requestFullscreen();
+        } catch (err) { /* браузер может запретить */ }
+      }
+    });
+  }
 
   /* ---- 6.5. Главное меню ---- */
 
@@ -1745,15 +1858,20 @@
   }
 
   function displayName(id) {
-    return roomAlias(id) || (String(id) === 'main' ? 'Главная' : prettyName(id));
+    return roomAlias(id) || shortName(id);
   }
 
-  /** Короткое имя для узких мест интерфейса: «Главная» или имя подкомнаты. */
+  /** Короткое имя для узких мест: «Main» или «Subroom N» по порядку в списке. */
   function shortName(id) {
     const alias = roomAlias(id);
     if (alias) return alias;
-    if (isSubRoom(id)) return String(id).split(SUB_SEP).pop();
-    return String(id || 'main') === 'main' ? 'Главная' : String(id);
+    if (isSubRoom(id)) {
+      const parent = parentOf(id);
+      const name = String(id).split(SUB_SEP).pop();
+      const index = subsOf(parent).indexOf(name);
+      return 'Subroom ' + (index >= 0 ? index + 1 : 1);
+    }
+    return String(id) === 'main' ? 'Main' : String(id);
   }
 
   /** Поле «новая подкомната» прямо в списке комнат: без диалогов и перезагрузок. */
@@ -1960,6 +2078,23 @@
   /* ═══════════ 5. Запуск ═══════════ */
   function initEntry() {
     document.documentElement.dataset.volnaEntry = '1'; // отметка для selftest.html и отладки
+    // диагностика демонстрации экрана: только по ?debug=1
+    try {
+      if (/[?&]debug=1/.test(location.search)) {
+        window.addEventListener('unhandledrejection', (e) => {
+          window.__lastRejection = String((e.reason && e.reason.message) || e.reason);
+        });
+        const gdm = navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia;
+        if (gdm) {
+          navigator.mediaDevices.getDisplayMedia = function (...args) {
+            return gdm.apply(this, args).catch((err) => {
+              window.__gdmError = String(err && err.name) + ': ' + String(err && err.message);
+              throw err;
+            });
+          };
+        }
+      }
+    } catch (e) { /* не критично */ }
     watchJoinScreen();
     guardDoubleJoin();
     bindBanner();
@@ -1967,6 +2102,8 @@
     bindMenu();
     bindChatFiles();
     bindSubroomActions();
+    bindZoom();
+    watchRoomMeta();
     // Чат виден сразу: он часть комнаты, а не спрятанная за кнопкой панель
     if (store.get('chat', '1') !== '0') chatShow(true);
     loadBooks();

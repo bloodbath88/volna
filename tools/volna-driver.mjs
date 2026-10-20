@@ -51,6 +51,15 @@ function chromeFlags(profileDir, port) {
   if (withMic) {
     f.splice(1, 0, '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream');
   }
+  if (scenario === 'screenshare') {
+    // захват экрана без диалогового окна — для автотеста демонстрации
+    f.splice(1, 0,
+      '--enable-usermedia-screen-capturing',
+      '--auto-select-desktop-capture-source=Entire screen',
+      '--use-fake-ui-for-media-stream',
+      '--allow-http-screen-capture'
+    );
+  }
   return f;
 }
 
@@ -1058,6 +1067,26 @@ async function main() {
       report.ok = inRoom(s);
     }
 
+    if (scenario === 'shotlogin') {
+      // Снимок экрана входа: без подключения к комнате
+      await open();
+      await sleep(2500);
+      if (process.env.VOLNA_SHOT_W) {
+        await cdp.send('Emulation.setDeviceMetricsOverride', {
+          width: Number(process.env.VOLNA_SHOT_W || 1280),
+          height: Number(process.env.VOLNA_SHOT_H || 800),
+          deviceScaleFactor: 1,
+          mobile: false,
+        });
+        await sleep(800);
+      }
+      const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+      const file = join(process.cwd(), 'shot-login-' + Date.now() + '.png');
+      writeFileSync(file, Buffer.from(shot.data, 'base64'));
+      step('снимок экрана входа', { file });
+      report.ok = true;
+    }
+
     if (scenario === 'shot') {
       // Снимок интерфейса — чтобы проверять вёрстку (чат внизу списка участников)
       await open();
@@ -1121,7 +1150,52 @@ async function main() {
       step('до создания', before);
       step('поле ввода', editing);
       step('после создания', after);
-      report.ok = !!editing.hasInput && after.rows.length === 2 && after.title === 'subroom' && !seenJoin && after.chatVisible;
+      report.ok = !!editing.hasInput && after.rows.length === 2 && after.rows[1].indexOf('Subroom 1') >= 0 && after.title === 'Volna' && !seenJoin && after.chatVisible;
+    }
+
+    if (scenario === 'screenshare') {
+      await open();
+      await fill();
+      await cdp.eval(clickJoin, false);
+      await waitFor(cdp, inRoom, 15000, 500);
+      const probe = await cdp.eval(`(async () => {
+        try {
+          const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          const track = stream.getVideoTracks()[0];
+          const settings = track ? track.getSettings() : {};
+          stream.getTracks().forEach((t) => t.stop());
+          return { ok: true, width: settings.width || 0, height: settings.height || 0 };
+        } catch (e) { return { ok: false, err: String((e && e.message) || e) }; }
+      })()`, true);
+      step('захват экрана напрямую', probe);
+      await sleep(1500);
+      const spot = await cdp.eval(`(() => { const el = document.querySelector('#screenBtn'); const r = el.getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), w: Math.round(r.width), h: Math.round(r.height), title: el.title }; })()`, false);
+      step('кнопка демонстрации', spot);
+      const hit = await cdp.eval(`(() => { const el = document.elementFromPoint(${spot.x}, ${spot.y}); return el ? (el.id || el.className || el.tagName) : 'нет'; })()`, false);
+      step('что под точкой клика', hit);
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: spot.x, y: spot.y, button: 'left', clickCount: 1 });
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: spot.x, y: spot.y, button: 'left', clickCount: 1 });
+      let state = null;
+      for (let i = 0; i < 20; i++) {
+        await sleep(700);
+        state = await cdp.eval(`(() => {
+          const wrap = document.querySelector('#stageWrap');
+          const video = document.querySelector('#stageVideo');
+          return {
+            wrapVisible: !!wrap && !wrap.classList.contains('hidden'),
+            width: video ? video.videoWidth : 0,
+            height: video ? video.videoHeight : 0,
+            paused: video ? video.paused : null,
+            label: (document.querySelector('#stageLabel') || {}).textContent || '',
+            toasts: Array.from(document.querySelectorAll('#toasts .toast')).map((t) => t.textContent).slice(-3),
+            gdmError: window.__gdmError || '',
+            rejection: window.__lastRejection || '',
+          };
+        })()`, false);
+        if (state.width > 0) break;
+      }
+      step('демонстрация экрана', state);
+      report.ok = !!state && state.wrapVisible && state.width > 0;
     }
 
     if (scenario === 'badpass') {

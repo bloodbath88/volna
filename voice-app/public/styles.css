@@ -29,7 +29,7 @@ body{
   font:15px/1.45 var(--font-ui);
   background:
     radial-gradient(1200px 700px at 12% -10%, rgba(142,255,3,.12), transparent 62%),
-    linear-gradient(rgba(5,7,4,.28), rgba(5,7,4,.58)),
+    linear-gradient(rgba(5,7,4,.16), rgba(5,7,4,.40)),
     url('bg/kadran.jpg') center/cover no-repeat fixed,
     var(--bg);
   -webkit-font-smoothing:antialiased;
@@ -48,8 +48,9 @@ button,input,select{font:inherit;color:inherit}
 .join{min-height:100dvh;display:grid;place-items:center;padding:24px}
 .join-card{
   width:min(520px,100%);display:grid;gap:16px;padding:26px;
-  background:linear-gradient(180deg,rgba(255,255,255,.025),transparent 45%),var(--panel);
+  background:linear-gradient(180deg,rgba(255,255,255,.03),transparent 45%),rgba(10,14,10,.76);
   border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
 }
 .brand{display:flex;align-items:center;gap:12px}
 .logo{width:40px;height:40px;flex:none;color:var(--accent);fill:currentColor}
@@ -116,6 +117,11 @@ button,input,select{font:inherit;color:inherit}
 .chan-row.current{background:var(--panel2);color:var(--text);border-color:var(--line2)}
 .chan-ok{border:0;background:transparent;color:var(--accent);cursor:pointer;font-size:14px;padding:0 4px}
 /* плашка на время перехода между комнатами */
+.lightbox{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:rgba(0,0,0,.92);padding:24px}
+.lightbox img{max-width:96vw;max-height:90vh;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.7);cursor:zoom-out}
+.lightbox.hidden{display:none}
+.lightbox-close{position:absolute;top:18px;right:20px;width:36px;height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(20,24,18,.8);color:#e9f0e4;font-size:16px;cursor:pointer}
+.lightbox-close:hover{border-color:var(--accent);color:var(--accent)}
 .switch-overlay{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(10,9,8,.97);color:var(--muted);font:12px var(--font-display);letter-spacing:.16em;text-transform:uppercase}
 .switch-overlay.hidden{display:none}
 .chan-row.editing{background:var(--panel2);border-color:var(--line2);padding:3px 6px}
@@ -140,6 +146,8 @@ button,input,select{font:inherit;color:inherit}
   backdrop-filter:none;-webkit-backdrop-filter:none;
   display:flex;flex-direction:column;gap:10px;
 }
+/* демонстрация занимает свободное место над чатом, а не 100% высоты */
+.stage>.stage-wrap{flex:1 1 auto;height:auto;min-height:0}
 .side{display:none !important}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-content:start}
 .tile{
@@ -318,9 +326,9 @@ button,input,select{font:inherit;color:inherit}
 
 .chat-panel{
   position:static;width:min(760px,100%);margin:auto auto 0;
-  padding:10px 12px;border:1px solid var(--line);border-radius:14px;
-  background:rgba(10,14,9,.66);backdrop-filter:var(--glass);-webkit-backdrop-filter:var(--glass);
-  box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,.04);
+  padding:10px 0 0;border:0;border-top:1px solid rgba(142,255,3,.10);border-radius:0;
+  background:linear-gradient(180deg,rgba(8,11,8,0),rgba(8,11,8,.42));
+  backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none;
   display:flex;flex-direction:column;gap:6px;flex:0 1 auto;min-height:0;max-height:44%;
 }
 .chat-title{font-family:var(--font-display);font-weight:700;font-size:12px;letter-spacing:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

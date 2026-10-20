@@ -1,7 +1,22 @@
-# Volna 1.2.1 — centered chat, instant room switching, English docs
+# Volna 1.2.2 — seamless chat, clearer room naming, brighter backdrop
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
+
+## What's new in 1.2.2
+
+- **Room naming is explicit.** The page title reads **Volna**, the current room is shown as
+  **Main** or **Subroom 1 / Subroom 2 …** — a parent name never leaks into a child,
+  every entry carries its own label.
+- **Seamless chat.** The panel lost its border and background card: it fades into the stage
+  and stays visible for every participant.
+- **Brighter backdrop** on both the room and the sign-in screen; the sign-in card is
+  semi-transparent so the artwork shows through.
+- **Screen sharing hardened.** If the system refuses to capture desktop audio or the server
+  rejects simulcast layers, the app falls back automatically (video-only, then plain publish)
+  instead of failing silently.
+- **1440p60 viewing.** Screen share publishes 720p / 1080p / 1440p simulcast layers;
+  a viewer gets the top layer on full screen (double-click the shared video).
 
 ## What's new in 1.2.1
 
@@ -75,8 +90,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-bcfcf2a8342d983f0ef7e8a3721618bd6d99ffeea3585a65dcaab1a422997bbd  volna-voice-app.zip
-555811ac7aef4e66313cc720d1b5e10072e5dd29eda3083ef004c2fc664725b7  volna-voice-app-linux.tar.gz
+6b054cbe1bea6bf5ad6253bdbc9158f297e393e4af1b512e2daa1efa35c18b1d  volna-voice-app.zip
+3d79a9802c1dfb244f34b395de9c71d596b787b85738aba33f5f9c211b1ae280  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)
