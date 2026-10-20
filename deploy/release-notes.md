@@ -1,9 +1,17 @@
-# Volna 1.4.0 — heroes backdrop, fog animation, one window per user
+# Volna 1.4.1 — flat channel list, no switch errors
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.4.1
+
+- **Channel list is always flat.** A room created while standing in a sub-room could produce
+  a name like `main--pubg--ererer` and looked nested. Stored names are migrated to their last
+  segment, so Main always lists its rooms at one level.
+- **No false join errors.** When switching rooms, the disconnect of the previous connection is
+  no longer shown as “Не удалось войти: Client initiated disconnect”.
 
 ## What's new in 1.2.3
 
@@ -105,8 +113,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-7da819de2a902411e4dc6bdaa29845c7b2bd96b43eb480b86f1af5159f60f1b5  volna-voice-app.zip
-60b29be4bfd9d824436bfa220bd6ed75e0e7c8a6ff3873c5e59c318cef2878e5  volna-voice-app-linux.tar.gz
+8fb0914ea03cdcace058c61483549ac7174a0d888cc8e5a8040a8f0d49897ddf  volna-voice-app.zip
+b9036a30b13c7debc356b00d81f863d201004add4a98370f80a75aff8c18150b  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)

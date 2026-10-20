@@ -423,6 +423,10 @@
         if (SWITCH.active) {
           SWITCH.active = false;
           switchOverlay(false);
+          // при переходе LiveKit может сообщить о разрыве старого соединения — это не ошибка
+          document.querySelectorAll('#toasts .toast.error').forEach((t) => {
+            if (/client initiated disconnect|не удалось войти/i.test(t.textContent || '')) t.remove();
+          });
         }
         const backBtn = $('#chatBackBtn');
         if (backBtn) backBtn.classList.toggle('hidden', !isSubRoom(currentRoom()));
@@ -1880,6 +1884,17 @@
       const data = JSON.parse(store.get('subs', '{}'));
       SUBS.byRoom = (data && typeof data === 'object') ? data : {};
     } catch (e) { SUBS.byRoom = {}; }
+    // Миграция: раньше при создании из подкомнаты могли появляться имена с «--».
+    // Оставляем только последний сегмент, чтобы список всегда был плоским.
+    Object.keys(SUBS.byRoom).forEach((room) => {
+      const cleaned = [];
+      (SUBS.byRoom[room] || []).forEach((name) => {
+        const short = String(name || '').split(SUB_SEP).pop();
+        if (short && cleaned.indexOf(short) === -1) cleaned.push(short);
+      });
+      SUBS.byRoom[room] = cleaned;
+    });
+    saveSubs();
   }
 
   function saveSubs() { store.set('subs', JSON.stringify(SUBS.byRoom)); }

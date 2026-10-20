@@ -1276,6 +1276,23 @@ async function main() {
       cdpB.close();
     }
 
+    if (scenario === 'flatsubs') {
+      // старые вложенные имена (main--pubg--ererer) должны стать плоским списком
+      await open();
+      await cdp.eval(`(() => {
+        localStorage.setItem('volna.subs', JSON.stringify({ main: ['pubg--ererer', 'хуй'] }));
+        return true;
+      })()`, false);
+      await cdp.send('Page.navigate', { url: BASE + '/' });
+      await sleep(1500);
+      await fill();
+      await cdp.eval(clickJoin, false);
+      await waitFor(cdp, inRoom, 15000, 500);
+      const rows = await cdp.eval(`Array.from(document.querySelectorAll('#channelList .chan-row')).map((r) => r.textContent.trim())`, false);
+      step('плоский список', { rows });
+      report.ok = rows.length === 3 && rows[1].indexOf('ererer') >= 0 && rows[1].indexOf('pubg') < 0;
+    }
+
     if (scenario === 'badpass') {
       await open();
       await cdp.eval(setJoinFields(name, 'неверный-пароль-123', room), false);
