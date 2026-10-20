@@ -13,6 +13,7 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
   new rooms get `subroom`, `subroom-2`, `subroom-3` … by default.
 - **Cleaner chat header.** Only the attach button remains there; rooms are created
   from the channel list with **+**.
+- The main room is labelled **«Главная»** in the interface; its technical name stays main.
 - **Brighter background** so the artwork and every interface element stay readable.
 
 ## What's new
@@ -74,8 +75,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-19f9aef1f3be5513331318f6b54b853281965bfe4ec0a24acd159f0a92a3e67a  volna-voice-app.zip
-964ebe997b81328c8ad102afa61da6fd195b0856d18b6d2deb439152281dff38  volna-voice-app-linux.tar.gz
+bcfcf2a8342d983f0ef7e8a3721618bd6d99ffeea3585a65dcaab1a422997bbd  volna-voice-app.zip
+555811ac7aef4e66313cc720d1b5e10072e5dd29eda3083ef004c2fc664725b7  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)

@@ -1745,15 +1745,15 @@
   }
 
   function displayName(id) {
-    return roomAlias(id) || prettyName(id);
+    return roomAlias(id) || (String(id) === 'main' ? 'Главная' : prettyName(id));
   }
 
-  /** Короткое имя для узких мест интерфейса: «main» или имя подкомнаты, без длинных цепочек. */
+  /** Короткое имя для узких мест интерфейса: «Главная» или имя подкомнаты. */
   function shortName(id) {
     const alias = roomAlias(id);
     if (alias) return alias;
     if (isSubRoom(id)) return String(id).split(SUB_SEP).pop();
-    return String(id || 'main');
+    return String(id || 'main') === 'main' ? 'Главная' : String(id);
   }
 
   /** Поле «новая подкомната» прямо в списке комнат: без диалогов и перезагрузок. */
