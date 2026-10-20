@@ -1,4 +1,4 @@
-# Volna 1.3.0 — Night Stalker sign-in screen
+# Volna 1.3.1 — Night Stalker sign-in artwork
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
@@ -105,8 +105,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-44248ae6ffc44058b345bfd20fa1ca14349eb3ee6bc80a8d5c7318db1e5b5d5e  volna-voice-app.zip
-b6eed0004f753db6baa2f11773f3d13da4e65972d571cf32ea77f753928421c2  volna-voice-app-linux.tar.gz
+28d140b25020245adf1ea1874546308cd92a6b0283ba2b4fd00ece2e88136c68  volna-voice-app.zip
+c24e113dc94979b6d8061b42df91f8ddb439d24031912d3d66ffc6976f04b3e6  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)
