@@ -1,9 +1,16 @@
-# Volna 1.4.1 — flat channel list, no switch errors
+# Volna 1.4.2 — connection ping indicator
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.4.2
+
+- **Ping in the header.** A live round-trip indicator sits next to the participant counter:
+  green under 80 ms, amber under 180 ms, red above. It is measured from the active
+  peer connection (`candidate-pair.currentRoundTripTime`) every three seconds and resets
+  to “—” when the room is closed.
 
 ## What's new in 1.4.1
 
@@ -113,8 +120,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-8fb0914ea03cdcace058c61483549ac7174a0d888cc8e5a8040a8f0d49897ddf  volna-voice-app.zip
-b9036a30b13c7debc356b00d81f863d201004add4a98370f80a75aff8c18150b  volna-voice-app-linux.tar.gz
+8121043f494e4670d3245aca0165f0ce09b9a37a7822b3a3e185a124185409fb  volna-voice-app.zip
+f0c7bfa60f17e72cb91c428802a20db8c4bdcd4de30e323d2923c76e3642c16e  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)

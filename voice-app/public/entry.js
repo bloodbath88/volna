@@ -303,6 +303,7 @@
             active = this;
             LOCK.busy = true;
             lockRefresh();
+            startPingLoop();
             if (LOCK.timer) clearInterval(LOCK.timer);
             LOCK.timer = setInterval(lockRefresh, 5000);
             inviteAutofilled = false;
@@ -332,6 +333,7 @@
             LOCK.busy = false;
             if (LOCK.timer) { clearInterval(LOCK.timer); LOCK.timer = 0; }
             lockRelease();
+            stopPingLoop();
           }
           rooms.delete(this);
           roomsMark();
@@ -820,6 +822,72 @@
     if (!el || !('MutationObserver' in window)) return;
     new MutationObserver(tidyRoomMeta).observe(el, { childList: true, characterData: true, subtree: true });
     tidyRoomMeta();
+  }
+
+  /* ---- 6.1b. Пинг: реальная задержка соединения ---- */
+
+  const PC_LIST = [];
+
+  // Запоминаем создаваемые PeerConnection'ы, чтобы читать из них RTT
+  (function trackPeerConnections() {
+    const Native = window.RTCPeerConnection;
+    if (!Native) return;
+    const Wrapped = function (cfg, ...rest) {
+      const pc = new Native(cfg, ...rest);
+      try { PC_LIST.push(pc); } catch (e) { /* не критично */ }
+      return pc;
+    };
+    Wrapped.prototype = Native.prototype;
+    window.RTCPeerConnection = Wrapped;
+  })();
+
+  async function measureRtt() {
+    let best = 0;
+    for (const pc of PC_LIST.slice(-6)) {
+      if (!pc || pc.signalingState === 'closed') continue;
+      try {
+        const stats = await pc.getStats();
+        stats.forEach((item) => {
+          if (item.type === 'candidate-pair' && item.state === 'succeeded' && typeof item.currentRoundTripTime === 'number') {
+            const ms = Math.round(item.currentRoundTripTime * 1000);
+            if (ms > 0 && (!best || ms < best)) best = ms;
+          }
+        });
+      } catch (e) { /* соединение могло закрыться */ }
+    }
+    return best;
+  }
+
+  function paintPing(ms) {
+    const badge = $('#pingBadge');
+    if (!badge) return;
+    const value = badge.querySelector('b');
+    if (!ms) {
+      badge.classList.remove('good', 'ok', 'bad');
+      if (value) value.textContent = '—';
+      badge.title = 'Задержка: нет данных';
+      return;
+    }
+    if (value) value.textContent = ms + ' мс';
+    badge.classList.toggle('good', ms < 80);
+    badge.classList.toggle('ok', ms >= 80 && ms < 180);
+    badge.classList.toggle('bad', ms >= 180);
+    badge.title = 'Задержка связи: ' + ms + ' мс';
+  }
+
+  function startPingLoop() {
+    if (LOCK.pingTimer) clearInterval(LOCK.pingTimer);
+    const tick = () => {
+      if (!active) return;
+      measureRtt().then(paintPing).catch(() => undefined);
+    };
+    tick();
+    LOCK.pingTimer = setInterval(tick, 3000);
+  }
+
+  function stopPingLoop() {
+    if (LOCK.pingTimer) { clearInterval(LOCK.pingTimer); LOCK.pingTimer = 0; }
+    paintPing(0);
   }
 
   /* ---- 6.1. Имя хоста: на машине с сервером по умолчанию «Admin» ---- */

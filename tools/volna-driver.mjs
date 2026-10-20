@@ -1293,6 +1293,20 @@ async function main() {
       report.ok = rows.length === 3 && rows[1].indexOf('ererer') >= 0 && rows[1].indexOf('pubg') < 0;
     }
 
+    if (scenario === 'pingtest') {
+      await open();
+      await fill();
+      await cdp.eval(clickJoin, false);
+      await waitFor(cdp, inRoom, 15000, 500);
+      await sleep(7000);
+      const badge = await cdp.eval(`(() => {
+        const el = document.querySelector('#pingBadge');
+        return { text: el ? el.textContent.trim() : '', cls: el ? el.className : '' };
+      })()`, false);
+      step('пинг', badge);
+      report.ok = /\d+\s*мс/.test(badge.text);
+    }
+
     if (scenario === 'badpass') {
       await open();
       await cdp.eval(setJoinFields(name, 'неверный-пароль-123', room), false);

@@ -416,3 +416,14 @@ button,input,select{font:inherit;color:inherit}
 .chan-del{opacity:0;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px;transition:opacity .12s,color .12s}
 .chan-row:hover .chan-del{opacity:1}
 .chan-del:hover{color:var(--red)}
+
+/* индикатор пинга в шапке */
+.ping{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--line);border-radius:99px;background:var(--panel2);font-size:12px;color:var(--muted)}
+.ping i{width:7px;height:7px;border-radius:50%;background:var(--muted);display:block}
+.ping b{font-weight:600;letter-spacing:.02em}
+.ping.good i{background:var(--accent);box-shadow:0 0 8px rgba(142,255,3,.6)}
+.ping.good b{color:var(--accent)}
+.ping.ok i{background:var(--amber);box-shadow:0 0 8px rgba(216,255,122,.5)}
+.ping.ok b{color:var(--amber)}
+.ping.bad i{background:var(--red);box-shadow:0 0 8px rgba(255,90,77,.5)}
+.ping.bad b{color:var(--red)}
