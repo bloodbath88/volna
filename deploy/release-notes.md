@@ -1,9 +1,17 @@
-# Volna 1.4.3 — «Основной» label, clean room deletion
+# Volna 1.4.4 — no phantom “Client initiated disconnect”
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.4.4
+
+- **Phantom join errors removed.** When a room is left or switched, LiveKit reports the
+  disconnect of the previous connection; those notifications are now filtered out, so the room
+  no longer shows “Не удалось войти: Client initiated disconnect”. Real errors stay visible.
+- **Single join attempt.** A second join is ignored while the first one is in flight or while
+  you are already in a room, which removes a source of double connections.
 
 ## What's new in 1.4.3
 
@@ -128,8 +136,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-0c132cd1afd32bd4d13bd00438bbfe65416e8501035d1f87bfa27e00a49da110  volna-voice-app.zip
-d1e77fa92aaf7f69d22f1370d6fedc30cef11bc4e14d92a1074133544138800c  volna-voice-app-linux.tar.gz
+30b0408f242c8e857b0fcb7da30ee49cabb442a179dbf87afdf9ecb640249deb  volna-voice-app.zip
+c6223073385afb46afbd1301246a235c3adec0902dbe42e1db378870b0a5a54f  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)

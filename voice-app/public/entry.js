@@ -302,6 +302,7 @@
             const res = await connect(url, token, opts);
             active = this;
             LOCK.busy = true;
+            window.__volnaJoining = false;
             lockRefresh();
             startPingLoop();
             if (LOCK.timer) clearInterval(LOCK.timer);
@@ -585,11 +586,28 @@
   }
 
   function doJoin() {
+    if (inRoom()) return;                     // уже в комнате — повторный вход не нужен
+    if (window.__volnaJoining) return;        // вход уже идёт
     if (otherTabBusy()) { blockSecondWindow(); return; }
+    window.__volnaJoining = true;
+    setTimeout(() => { window.__volnaJoining = false; }, 12000);
     const roomInput = $('#roomInput');
     if (roomInput) setRealRoom(roomInput.value);
     const btn = $('#joinBtn');
     if (btn && !btn.disabled) btn.click();
+  }
+
+  /** Во время переключения LiveKit сообщает о разрыве старого соединения — это не ошибка. */
+  function muteSwitchErrors() {
+    const box = $('#toasts');
+    if (!box || !('MutationObserver' in window)) return;
+    new MutationObserver(() => {
+      box.querySelectorAll('.toast').forEach((t) => {
+        const text = String(t.textContent || '');
+        if (/client initiated disconnect/i.test(text)) t.remove();
+        else if (SWITCH.active && /не удалось войти/i.test(text)) t.remove();
+      });
+    }).observe(box, { childList: true });
   }
 
   function cleanHash() {
@@ -2310,6 +2328,7 @@
     watchJoinScreen();
     initSessionLock();
     guardMultiJoin();
+    muteSwitchErrors();
     guardDoubleJoin();
     bindBanner();
     bindInviteButton();

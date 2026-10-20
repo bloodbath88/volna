@@ -1307,6 +1307,25 @@ async function main() {
       report.ok = /\d+\s*мс/.test(badge.text);
     }
 
+    if (scenario === 'toastmute') {
+      await open();
+      await fill();
+      await cdp.eval(clickJoin, false);
+      await waitFor(cdp, inRoom, 15000, 500);
+      await cdp.eval(`(() => {
+        const box = document.querySelector('#toasts');
+        const t = document.createElement('div');
+        t.className = 'toast error';
+        t.textContent = 'Не удалось войти: Client initiated disconnect';
+        box.append(t);
+        return true;
+      })()`, false);
+      await sleep(600);
+      const left = await cdp.eval(`Array.from(document.querySelectorAll('#toasts .toast')).map((t) => t.textContent)`, false);
+      step('тосты после фильтра', { left });
+      report.ok = !left.some((t) => /client initiated disconnect/i.test(t));
+    }
+
     if (scenario === 'badpass') {
       await open();
       await cdp.eval(setJoinFields(name, 'неверный-пароль-123', room), false);
