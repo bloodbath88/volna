@@ -357,6 +357,12 @@
       let hidden = js.classList.contains('hidden');
       new MutationObserver(() => {
         const now = js.classList.contains('hidden');
+        // Мгновенный переход: пока идёт смена комнаты, экран входа не показываем
+        if (SWITCH.active && !now) {
+          js.classList.add('hidden');
+          const room = $('#roomScreen');
+          if (room) room.classList.remove('hidden');
+        }
         if (hidden && !now) setTimeout(afterLeave, 0); // приложение вернулось на экран входа
         hidden = now;
       }).observe(js, { attributes: true, attributeFilter: ['class'] });
@@ -904,7 +910,6 @@
     if (inRoom()) {
       ROOMS.pending = target;
       SWITCH.active = true;
-      switchOverlay(true);
       const leaveBtn = $('#leaveBtn');
       if (leaveBtn) leaveBtn.click();
     } else {
@@ -1156,24 +1161,17 @@
     chatScroll();
   }
 
-  function chatShow(show) {
-    CHAT.open = !!show;
+  function chatShow() {
+    // Чат виден всегда и всем: это общая лента комнаты, а не всплывающая панель
+    CHAT.open = true;
     const panel = $('#chatPanel');
-    // Чат живёт внизу списка участников и не прячется полностью:
-    // свёрнутое состояние — только заголовок со счётчиком, без отдельного окна.
     if (panel) {
       panel.classList.remove('hidden');
-      panel.classList.toggle('collapsed', !CHAT.open);
+      panel.classList.remove('collapsed');
     }
-    const toggle = $('#chatToggle');
-    if (toggle) toggle.checked = CHAT.open;
-    if (CHAT.open) {
-      CHAT.unread = 0;
-      renderChatBadge();
-      chatScroll();
-      const input = $('#chatInput');
-      if (input) input.focus();
-    }
+    CHAT.unread = 0;
+    renderChatBadge();
+    chatScroll();
   }
 
   function chatSend(text) {
@@ -1378,8 +1376,8 @@
   function bindChatFiles() {
     // Встраиваем чат внизу колонки с участниками: отдельного окна больше нет
     const panel = $('#chatPanel');
-    const side = document.querySelector('.side');
-    if (panel && side && panel.parentElement !== side) side.append(panel);
+    const stage = document.querySelector('.stage');
+    if (stage && panel.parentElement !== stage) stage.append(panel);
 
     const input = $('#chatFile');
     if (input) {
@@ -1525,7 +1523,10 @@
     const menuLeave = $('#menuLeaveBtn');
     if (menuLeave) menuLeave.addEventListener('click', () => { closeMenu(); const b = $('#leaveBtn'); if (b) b.click(); });
     const chatBtn = $('#chatBtn');
-    if (chatBtn) chatBtn.addEventListener('click', () => chatShow(!CHAT.open));
+    if (chatBtn) chatBtn.addEventListener('click', () => {
+      const input = $('#chatInput');
+      if (input) input.focus();
+    });
     const chatClose = $('#chatCloseBtn');
     if (chatClose) chatClose.addEventListener('click', () => chatShow(false));
     const chatForm = $('#chatForm');
@@ -1777,8 +1778,8 @@
     box.append(row);
 
     const submit = () => {
-      const name = cleanRoomName(input.value);
-      if (!name) { input.focus(); return; }
+      const parent = isSubRoom(currentRoom()) ? parentOf(currentRoom()) : currentRoom();
+      const name = cleanRoomName(input.value) || defaultSubName(parent);
       row.remove();
       const field = $('#newSubInput');
       if (field) field.value = name;
@@ -1826,7 +1827,8 @@
         if (next == null) return;
         setRoomAlias(r.id, String(next).trim());
       });
-      row.append(mark, label, edit);
+      row.append(mark, label);
+      if (!r.main) row.append(edit);
       row.title = r.main ? 'Общая комната' : 'Подкомната: свой звук и свой чат';
       row.addEventListener('click', () => switchToRoom(r.id));
       row.addEventListener('dblclick', (e) => {
@@ -1892,11 +1894,20 @@
     });
   }
 
+  /** Имя подкомнаты по умолчанию: subroom, subroom-2, subroom-3… */
+  function defaultSubName(parent) {
+    const taken = subsOf(parent);
+    const base = 'subroom';
+    if (taken.indexOf(base) === -1) return base;
+    let index = 2;
+    while (taken.indexOf(base + '-' + index) !== -1) index++;
+    return base + '-' + index;
+  }
+
   async function createSub() {
     const input = $('#newSubInput');
-    const sub = cleanRoomName(input && input.value);
-    if (!sub) { toast('Название подкомнаты: буквы, цифры, дефис', 'error'); return; }
     const parent = isSubRoom(currentRoom()) ? parentOf(currentRoom()) : currentRoom();
+    const sub = cleanRoomName(input && input.value) || defaultSubName(parent);
     const id = addSub(parent, sub);
     if (input) input.value = '';
     renderSubs(); // строка появляется сразу — без ожидания сети

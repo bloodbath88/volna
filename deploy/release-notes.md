@@ -1,7 +1,19 @@
-# Volna 1.2 — interface refresh, Discord-style rooms, English docs
+# Volna 1.2.1 — centered chat, instant room switching, English docs
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
+
+## What's new in 1.2.1
+
+- **Chat moved to the center.** It is now a wide panel at the bottom of the stage,
+  always visible and shared by everyone in the room — no toggle, no separate window.
+- **Instant switching.** Going from a room to a sub-room no longer flashes the join
+  screen: the current view stays until the new connection is ready.
+- **Predictable names.** The main room is always `main` and cannot be renamed;
+  new rooms get `subroom`, `subroom-2`, `subroom-3` … by default.
+- **Cleaner chat header.** Only the attach button remains there; rooms are created
+  from the channel list with **+**.
+- **Brighter background** so the artwork and every interface element stay readable.
 
 ## What's new
 
@@ -62,8 +74,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-8a0dbdc5df1bd1bbac63cfac52ca3dbb92d5c7626cc15d928373b5639e23b58c  volna-voice-app.zip
-5c01919737fb1d7cc2f3edd1cb556ad504b7e7bca7d80e1d79a55a4c6b915b48  volna-voice-app-linux.tar.gz
+19f9aef1f3be5513331318f6b54b853281965bfe4ec0a24acd159f0a92a3e67a  volna-voice-app.zip
+964ebe997b81328c8ad102afa61da6fd195b0856d18b6d2deb439152281dff38  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)

@@ -28,8 +28,8 @@ body{
   margin:0;color:var(--text);
   font:15px/1.45 var(--font-ui);
   background:
-    radial-gradient(1200px 700px at 12% -10%, rgba(142,255,3,.10), transparent 62%),
-    linear-gradient(rgba(5,7,4,.52), rgba(5,7,4,.78)),
+    radial-gradient(1200px 700px at 12% -10%, rgba(142,255,3,.12), transparent 62%),
+    linear-gradient(rgba(5,7,4,.28), rgba(5,7,4,.58)),
     url('bg/kadran.jpg') center/cover no-repeat fixed,
     var(--bg);
   -webkit-font-smoothing:antialiased;
@@ -94,9 +94,9 @@ button,input,select{font:inherit;color:inherit}
 
 .room{
   height:100dvh;position:relative;display:grid;gap:10px;padding:10px;overflow:hidden;
-  grid-template-columns:240px minmax(0,1fr) 320px;
+  grid-template-columns:250px minmax(0,1fr);
   grid-template-rows:auto minmax(0,1fr) auto;
-  grid-template-areas:"top top top" "chan stage side" "ctl ctl ctl";
+  grid-template-areas:"top top" "chan stage" "ctl ctl";
 }
 /* левая колонка как в Discord: комнаты и участники */
 .channels{grid-area:chan;display:flex;flex-direction:column;min-height:0;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
@@ -136,9 +136,11 @@ button,input,select{font:inherit;color:inherit}
 
 .stage{
   grid-area:stage;position:relative;min-height:0;overflow:auto;padding:12px;
-  background:rgba(6,9,6,.26);border:1px solid var(--line);border-radius:var(--r);
+  background:rgba(6,9,6,.14);border:1px solid var(--line);border-radius:var(--r);
   backdrop-filter:none;-webkit-backdrop-filter:none;
+  display:flex;flex-direction:column;gap:10px;
 }
+.side{display:none !important}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-content:start}
 .tile{
   display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 12px;
@@ -315,8 +317,11 @@ button,input,select{font:inherit;color:inherit}
 #chatBtn .badge{margin-left:7px}
 
 .chat-panel{
-  margin:10px -12px -12px;padding:8px 12px 10px;border-top:1px solid var(--line);
-  display:flex;flex-direction:column;gap:6px;flex:0 0 auto;min-height:0;max-height:52%;
+  position:static;width:min(760px,100%);margin:auto auto 0;
+  padding:10px 12px;border:1px solid var(--line);border-radius:14px;
+  background:rgba(10,14,9,.66);backdrop-filter:var(--glass);-webkit-backdrop-filter:var(--glass);
+  box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,.04);
+  display:flex;flex-direction:column;gap:6px;flex:0 1 auto;min-height:0;max-height:44%;
 }
 .chat-title{font-family:var(--font-display);font-weight:700;font-size:12px;letter-spacing:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-actions{display:flex;gap:6px}

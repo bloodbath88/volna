@@ -1098,20 +1098,30 @@ async function main() {
       }))()`, false);
       await cdp.eval(`(() => {
         const input = document.querySelector('#chanNewRow input');
-        input.value = 'тестовая-1';
+        input.value = '';
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       })()`, false);
-      await sleep(6000);
+      let seenJoin = false;
+      for (let i = 0; i < 12; i++) {
+        await sleep(250);
+        const state = await cdp.eval(`(() => ({
+          join: !(document.querySelector('#joinScreen') || {}).classList.contains('hidden'),
+          room: !(document.querySelector('#roomScreen') || {}).classList.contains('hidden'),
+        }))()`, false);
+        if (state.join) seenJoin = true;
+      }
       const after = await cdp.eval(`(() => ({
         rows: Array.from(document.querySelectorAll('#channelList .chan-row')).map((r) => r.textContent.trim()),
         title: (document.querySelector('#roomTitle') || {}).textContent || '',
         chatTitle: (document.querySelector('#chatTitle') || {}).textContent || '',
         inRoom: !(document.querySelector('#roomScreen') || {}).classList.contains('hidden'),
+        chatVisible: !(document.querySelector('#chatPanel') || {}).classList.contains('hidden'),
       }))()`, false);
+      after.seenJoin = seenJoin;
       step('до создания', before);
       step('поле ввода', editing);
       step('после создания', after);
-      report.ok = !!editing.hasInput && after.rows.length === 2 && after.title.indexOf('тестовая-1') >= 0 && after.title.indexOf('--') < 0;
+      report.ok = !!editing.hasInput && after.rows.length === 2 && after.title === 'subroom' && !seenJoin && after.chatVisible;
     }
 
     if (scenario === 'badpass') {
