@@ -1,9 +1,17 @@
-# Volna 1.4.2 — connection ping indicator
+# Volna 1.4.3 — «Основной» label, clean room deletion
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.4.3
+
+- **The main room is labelled «Основной»** everywhere in the interface; its technical name
+  stays `main`, so links and invites keep working.
+- **Deleting a sub-room leaves no trace.** The stored display name and the saved “current room”
+  are cleared together with the room, and the list is redrawn at once.
+- **Orphan names are pruned on load**, so a renamed room that no longer exists cannot reappear.
 
 ## What's new in 1.4.2
 
@@ -120,8 +128,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-8121043f494e4670d3245aca0165f0ce09b9a37a7822b3a3e185a124185409fb  volna-voice-app.zip
-f0c7bfa60f17e72cb91c428802a20db8c4bdcd4de30e323d2923c76e3642c16e  volna-voice-app-linux.tar.gz
+0c132cd1afd32bd4d13bd00438bbfe65416e8501035d1f87bfa27e00a49da110  volna-voice-app.zip
+d1e77fa92aaf7f69d22f1370d6fedc30cef11bc4e14d92a1074133544138800c  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)

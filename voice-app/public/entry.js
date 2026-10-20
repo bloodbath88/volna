@@ -1963,6 +1963,7 @@
       SUBS.byRoom[room] = cleaned;
     });
     saveSubs();
+    pruneAliases();
   }
 
   function saveSubs() { store.set('subs', JSON.stringify(SUBS.byRoom)); }
@@ -1985,9 +1986,26 @@
     const parent = cleanRoomName(room || currentRoom());
     SUBS.byRoom[parent] = subsOf(parent).filter((x) => x !== name);
     saveSubs();
+    // если удалили комнату, в которой «сидим», возвращаемся в родительскую
+    if (String(store.get('room', '')) === parent + SUB_SEP + name) store.set('room', parent);
     renderSubs();
   }
 
+  /** Убираем сохранённые имена комнат, которых больше нет. */
+  function pruneAliases() {
+    let map = {};
+    try { map = JSON.parse(store.get('aliases', '{}')) || {}; } catch (e) { map = {}; }
+    const known = new Set(['main']);
+    Object.keys(SUBS.byRoom || {}).forEach((parent) => {
+      known.add(parent);
+      (SUBS.byRoom[parent] || []).forEach((sub) => known.add(parent + SUB_SEP + sub));
+    });
+    let changed = false;
+    Object.keys(map).forEach((id) => {
+      if (!known.has(id)) { delete map[id]; changed = true; }
+    });
+    if (changed) store.set('aliases', JSON.stringify(map));
+  }
   async function announceSub(name) {
     if (!active) return;
     try {
@@ -2036,7 +2054,7 @@
       const index = subsOf(parent).indexOf(name);
       return 'Subroom ' + (index >= 0 ? index + 1 : 1);
     }
-    return String(id) === 'main' ? 'Main' : String(id);
+    return String(id) === 'main' ? 'Основной' : String(id);
   }
 
   /** Поле «новая подкомната» прямо в списке комнат: без диалогов и перезагрузок. */
@@ -2127,8 +2145,14 @@
           e.stopPropagation();
           const parent = parentOf(r.id);
           const name = String(r.id).split(SUB_SEP).pop();
+          // удаляем и локальное имя, иначе старое название остаётся в списке
+          setRoomAlias(r.id, '');
           removeSub(parent, name);
-          if (currentRoom() === r.id) switchToRoom(parent);
+          if (currentRoom() === r.id) {
+            switchToRoom(parent || 'main');
+          } else {
+            renderChannels();
+          }
         });
         row.append(edit, del);
         row.title = 'Подкомната — свой звук и свой чат';
