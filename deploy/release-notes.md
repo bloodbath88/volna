@@ -1,7 +1,9 @@
-# Volna 1.2.3 — cleaner channel list, full-width chat, new join sound
+# Volna 1.2.4 — invite links that survive messengers
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
+
+- **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
 
 ## What's new in 1.2.3
 
@@ -103,8 +105,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-7bb8c2591bc23b4be340b20013a6a4eaf0145d8a258beee0edbb51d2c9f71009  volna-voice-app.zip
-3f8feb2ff4672b4f546c2c6c005941ce9ce4a95f373168290e9ec5568a4ca377  volna-voice-app-linux.tar.gz
+523ccf5010e8b230d31079732bf5b0e42f654427dd35e6e9a8449f5dd03f452e  volna-voice-app.zip
+15e766ec5ceb413cbd20a285ed5d9df485ac10cae1ba905ecd443940b50d664e  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)

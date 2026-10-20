@@ -438,13 +438,17 @@
   const IB = { timer: 0, bc: null, addresses: [], id: Math.random().toString(36).slice(2) };
 
   function inviteFromLocation() {
-    const hash = String(location.hash || '').replace(/^#/, '');
-    if (!hash) return null;
-    const p = new URLSearchParams(hash);
-    const code = readCode(p.get('i'));
-    if (code) return code;
-    const room = (p.get('r') || p.get('room') || '').trim();
-    if (room) return { room: room, key: p.get('k') || '' };
+    // Код приглашения может быть и после #, и в обычных параметрах адреса:
+    // некоторые мессенджеры вырезают часть после #, тогда сработает ?i=...
+    const sources = [String(location.hash || '').replace(/^#/, ''), String(location.search || '').replace(/^\?/, '')];
+    for (const hash of sources) {
+      if (!hash) continue;
+      const p = new URLSearchParams(hash);
+      const code = readCode(p.get('i'));
+      if (code) return code;
+      const room = (p.get('r') || p.get('room') || '').trim();
+      if (room) return { room: room, key: p.get('k') || '' };
+    }
     return null;
   }
 

@@ -1213,6 +1213,20 @@ async function main() {
       report.ok = !!state && state.wrapVisible && state.width > 0;
     }
 
+    if (scenario === 'remember') {
+      // 1) вход по ссылке в параметрах (?i=), 2) затем голый адрес — должен войти сам
+      const code = Buffer.from(JSON.stringify({ r: room, k: pass }), 'utf8').toString('base64url');
+      await cdp.send('Page.navigate', { url: BASE + '/?i=' + code });
+      await sleep(1500);
+      const first = await waitFor(cdp, inRoom, 20000, 500);
+      step('вход по ?i=', { room: first.roomVisible, title: first.roomTitle });
+      await cdp.send('Page.navigate', { url: BASE + '/' });
+      await sleep(800);
+      const second = await waitFor(cdp, inRoom, 15000, 500);
+      step('голый адрес', { room: second.roomVisible, title: second.roomTitle });
+      report.ok = first.roomVisible && second.roomVisible;
+    }
+
     if (scenario === 'badpass') {
       await open();
       await cdp.eval(setJoinFields(name, 'неверный-пароль-123', room), false);
