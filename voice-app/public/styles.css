@@ -1,35 +1,40 @@
 /* «Волна» — минималистичная тёмная тема */
 
 :root{
-  --bg:#0b0d11;
-  --panel:#12161d;
-  --panel2:#171c25;
-  --panel3:#222935;
-  --line:rgba(255,255,255,.07);
-  --line2:rgba(255,255,255,.13);
-  --text:#e9ecf2;
-  --muted:#8d97a8;
-  --accent:#6b8cff;
-  --accent2:#4fd6a0;
-  --red:#ff6b78;
-  --amber:#ffcf6b;
-  --r:14px;
+  /* почти чёрный + кислотный лайм (референс дашборда) на фоне тёмного фэнтези-арта */
+  --bg:#050605;
+  --panel:rgba(18,23,15,.62);
+  --panel2:rgba(30,38,24,.58);
+  --panel3:rgba(44,54,36,.62);
+  --line:rgba(142,255,3,.16);
+  --line2:rgba(142,255,3,.30);
+  --text:#e9f0e4;
+  --muted:#8c9a84;
+  --accent:#8eff03;
+  --accent2:#4fa203;
+  --red:#ff5a4d;
+  --amber:#d8ff7a;
+  --r:16px;
   --r-sm:10px;
-  --shadow:0 14px 40px rgba(0,0,0,.45);
+  --shadow:0 22px 60px rgba(0,0,0,.6);
+  --glass:blur(18px) saturate(1.1);
+  --font-ui:'Manrope','Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
+  --font-display:'Manrope','Segoe UI',system-ui,sans-serif;
 }
 
 *,*::before,*::after{box-sizing:border-box}
 html,body{height:100%}
 body{
   margin:0;color:var(--text);
-  font:15px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  font:15px/1.45 var(--font-ui);
   background:
-    radial-gradient(900px 620px at 10% -12%, rgba(66,98,206,.20), transparent 62%),
-    radial-gradient(720px 520px at 104% -4%, rgba(40,160,140,.13), transparent 58%),
+    radial-gradient(1200px 700px at 12% -10%, rgba(142,255,3,.10), transparent 62%),
+    linear-gradient(rgba(5,7,4,.52), rgba(5,7,4,.78)),
+    url('bg/kadran.jpg') center/cover no-repeat fixed,
     var(--bg);
   -webkit-font-smoothing:antialiased;
 }
-h1,h2,h3{margin:0;font-weight:600}
+h1,h2,h3{margin:0;font-weight:600;font-family:var(--font-display);letter-spacing:.02em}
 p{margin:0}
 .hidden{display:none !important}
 .muted{color:var(--muted)}
@@ -65,8 +70,17 @@ button,input,select{font:inherit;color:inherit}
 }
 .btn:hover{background:#2a3240}
 .btn:active{transform:translateY(1px)}
-.btn.primary{background:linear-gradient(180deg,#6f8dff,#5578f5);border-color:transparent;color:#fff;font-weight:600}
-.btn.primary:hover{filter:brightness(1.07)}
+/* стеклянные панели как в референсе */
+.side,.channels,.topbar,.stage{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--r);
+  backdrop-filter:var(--glass);
+  -webkit-backdrop-filter:var(--glass);
+  box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,.04);
+}
+.btn.primary{background:linear-gradient(180deg,#9dff2b,#7be000);border-color:transparent;color:#08120a;font-weight:700;box-shadow:0 8px 24px rgba(142,255,3,.22)}
+.btn.primary:hover{filter:brightness(1.06)}
 .btn.ghost{background:transparent}
 .btn.big{padding:13px 16px;font-size:16px}
 .btn.small{padding:7px 11px;font-size:13.5px}
@@ -79,18 +93,42 @@ button,input,select{font:inherit;color:inherit}
 /* ─────────── комната ─────────── */
 
 .room{
-  height:100dvh;position:relative;display:grid;gap:12px;padding:12px;
-  grid-template-columns:minmax(0,1fr) 320px;
+  height:100dvh;position:relative;display:grid;gap:10px;padding:10px;overflow:hidden;
+  grid-template-columns:240px minmax(0,1fr) 320px;
   grid-template-rows:auto minmax(0,1fr) auto;
-  grid-template-areas:"top top" "stage side" "ctl ctl";
+  grid-template-areas:"top top top" "chan stage side" "ctl ctl ctl";
 }
+/* левая колонка как в Discord: комнаты и участники */
+.channels{grid-area:chan;display:flex;flex-direction:column;min-height:0;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+.chan-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-bottom:1px solid var(--line)}
+.chan-room{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chan-scroll{flex:1 1 auto;min-height:0;overflow:auto;padding:6px 6px 10px}
+.chan-title{font-family:var(--font-display);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:8px 6px 4px}
+.channel-list{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+.chan-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:13px;color:var(--muted);border:1px solid transparent;cursor:pointer;transition:background .12s,color .12s}
+.chan-row.sub{padding-left:24px;font-size:12.5px;position:relative}
+.chan-row.sub::before{content:'';position:absolute;left:12px;top:50%;width:8px;height:1px;background:var(--line2)}
+.chan-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
+.chan-edit{opacity:0;border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px;transition:opacity .12s,color .12s}
+.chan-row:hover .chan-edit{opacity:1}
+.chan-edit:hover{color:var(--accent)}
+.chan-row:hover{background:var(--panel2);color:var(--text)}
+.chan-row.current{background:var(--panel2);color:var(--text);border-color:var(--line2)}
+.chan-ok{border:0;background:transparent;color:var(--accent);cursor:pointer;font-size:14px;padding:0 4px}
+/* плашка на время перехода между комнатами */
+.switch-overlay{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(10,9,8,.97);color:var(--muted);font:12px var(--font-display);letter-spacing:.16em;text-transform:uppercase}
+.switch-overlay.hidden{display:none}
+.chan-row.editing{background:var(--panel2);border-color:var(--line2);padding:3px 6px}
+.chan-input{flex:1 1 auto;min-width:0;background:transparent;border:0;outline:none;color:var(--text);font:13px var(--font-ui)}
+.chan-row .hash{opacity:.7;font-size:13px;width:14px;text-align:center}
+.chan-row .who-count{margin-left:auto;font-size:11.5px;color:var(--muted)}
 .topbar{
   grid-area:top;display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
 }
 .top-left{display:flex;align-items:center;gap:10px;min-width:0}
 .top-right{display:flex;align-items:center;gap:12px}
-.room-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.room-title{font-family:var(--font-display);font-weight:600;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 3px rgba(255,255,255,.04);flex:none}
 .dot.ok{background:var(--accent2)}
 .dot.warn{background:var(--amber)}
@@ -98,7 +136,8 @@ button,input,select{font:inherit;color:inherit}
 
 .stage{
   grid-area:stage;position:relative;min-height:0;overflow:auto;padding:12px;
-  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  background:rgba(6,9,6,.26);border:1px solid var(--line);border-radius:var(--r);
+  backdrop-filter:none;-webkit-backdrop-filter:none;
 }
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-content:start}
 .tile{
@@ -130,13 +169,13 @@ button,input,select{font:inherit;color:inherit}
 .stage-picker button:hover{background:var(--panel2)}
 
 .side{
-  grid-area:side;display:flex;flex-direction:column;min-height:0;padding:12px;
+  grid-area:side;display:flex;flex-direction:column;min-height:0;padding:12px;overflow:hidden;
   background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
 }
 .side-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .side-head h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .badge{padding:1px 8px;font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:99px}
-.people{display:flex;flex-direction:column;gap:6px;overflow:auto;min-height:0}
+.people{display:flex;flex-direction:column;gap:6px;overflow:auto;min-height:0;flex:1 1 auto}
 .person{
   display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;
   padding:7px 8px;border:1px solid transparent;border-radius:10px;transition:background .15s,border-color .15s;
@@ -276,28 +315,47 @@ button,input,select{font:inherit;color:inherit}
 #chatBtn .badge{margin-left:7px}
 
 .chat-panel{
-  position:absolute;right:14px;bottom:84px;z-index:45;width:min(360px,calc(100vw - 28px));
-  max-height:min(58vh,520px);display:flex;flex-direction:column;gap:8px;padding:12px;
-  background:var(--panel);border:1px solid var(--line2);border-radius:var(--r);box-shadow:var(--shadow);
+  margin:10px -12px -12px;padding:8px 12px 10px;border-top:1px solid var(--line);
+  display:flex;flex-direction:column;gap:6px;flex:0 0 auto;min-height:0;max-height:52%;
 }
-.chat-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.chat-log{flex:1;min-height:120px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.chat-title{font-family:var(--font-display);font-weight:700;font-size:12px;letter-spacing:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-actions{display:flex;gap:6px}
+.icon-btn{width:30px;height:30px;display:grid;place-items:center;padding:0;border:1px solid var(--line);background:var(--panel2);border-radius:8px;color:var(--muted);cursor:pointer;transition:color .15s,border-color .15s,background .15s}
+.icon-btn:hover{color:var(--text);border-color:var(--line2)}
+.icon-btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.icon-btn.send{background:var(--accent);border-color:transparent;color:#fff}
+.icon-btn.send:hover{filter:brightness(1.08)}
+.chat-panel.collapsed .chat-log,.chat-panel.collapsed .chat-form{display:none}
+.chat-panel.collapsed{max-height:none}
+.chat-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;letter-spacing:.02em;color:var(--muted)}
+.chat-log{flex:1 1 auto;min-height:70px;overflow:auto;display:flex;flex-direction:column;gap:6px}
 .chat-msg{font-size:13px;line-height:1.35;padding:6px 8px;border-radius:9px;background:var(--panel2);border:1px solid var(--line);word-break:break-word}
 .chat-msg .who{display:block;font-size:11.5px;color:var(--muted);margin-bottom:2px}
 .chat-msg.mine{border-color:rgba(107,140,255,.45)}
 .chat-msg.sys{background:transparent;border-color:transparent;color:var(--muted);font-size:12px;text-align:center}
-.chat-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.chat-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:center}
 .chat-form input{width:100%;padding:9px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);outline:none}
+/* файлы в чате */
+.chat-who{display:block;font-size:11.5px;color:var(--muted);margin-bottom:2px}
+.file-name{font-size:13px;line-height:1.3;word-break:break-word}
+.file-status{font-size:11.5px;margin-top:2px}
+.file-link{display:inline-block;margin-top:6px;font-size:12.5px;color:var(--accent);text-decoration:none}
+.file-link:hover{text-decoration:underline}
+.chat-img{display:block;max-width:100%;max-height:180px;margin-top:6px;border-radius:8px;border:1px solid var(--line)}
+.chat-panel.drop{border-color:var(--accent);box-shadow:0 0 0 2px rgba(107,140,255,.35),var(--shadow)}
+#chatFileBtn{cursor:pointer}
+#chatFileBtn input{display:none}
 
 /* ─────────── узкие экраны ─────────── */
 
 @media (max-width:900px){
   .room{
     grid-template-columns:minmax(0,1fr);
-    grid-template-rows:auto minmax(0,1fr) auto auto;
-    grid-template-areas:"top" "stage" "side" "ctl";
+    grid-template-rows:auto auto minmax(0,1fr) auto auto;
+    grid-template-areas:"top" "chan" "stage" "side" "ctl";
   }
-  .side{max-height:30vh}
+  .channels{max-height:26vh}
+  .side{max-height:40vh}
   .p-vol{display:none}
   .person{grid-template-columns:30px minmax(0,1fr) auto}
   .person{grid-template-columns:30px minmax(0,1fr)}

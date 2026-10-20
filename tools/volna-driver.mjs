@@ -7,7 +7,7 @@
  *   --mic      включить эмуляцию микрофона (иначе устройств нет)
  */
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -1056,6 +1056,62 @@ async function main() {
       const s = await waitFor(cdp, inRoom, 20000, 500);
       step('подключение', { room: s.roomVisible, title: s.roomTitle, people: s.people });
       report.ok = inRoom(s);
+    }
+
+    if (scenario === 'shot') {
+      // Снимок интерфейса — чтобы проверять вёрстку (чат внизу списка участников)
+      await open();
+      await fill();
+      await cdp.eval(clickJoin, false);
+      await sleep(6000);
+      if (process.env.VOLNA_SHOT_W) {
+        await cdp.send('Emulation.setDeviceMetricsOverride', {
+          width: Number(process.env.VOLNA_SHOT_W || 1280),
+          height: Number(process.env.VOLNA_SHOT_H || 800),
+          deviceScaleFactor: 1,
+          mobile: false,
+        });
+        await sleep(1200);
+      }
+      const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+      const file = join(process.cwd(), 'shot-' + Date.now() + '.png');
+      writeFileSync(file, Buffer.from(shot.data, 'base64'));
+      step('снимок сохранён', { file: file });
+      report.ok = true;
+    }
+
+    if (scenario === 'subcreate') {
+      // создание подкомнаты кнопкой «＋» в левой колонке: без диалогов, имя короткое
+      await open();
+      await fill();
+      await cdp.eval(clickJoin, false);
+      await waitFor(cdp, inRoom, 15000, 500);
+      const before = await cdp.eval(`(() => ({
+        rows: Array.from(document.querySelectorAll('#channelList .chan-row')).map((r) => r.textContent.trim()),
+        title: (document.querySelector('#roomTitle') || {}).textContent || '',
+      }))()`, false);
+      await cdp.eval(`document.querySelector('[data-volna-action="new-room"]').click()`, false);
+      await sleep(400);
+      const editing = await cdp.eval(`(() => ({
+        hasInput: !!document.querySelector('#chanNewRow input'),
+        focused: document.activeElement === document.querySelector('#chanNewRow input'),
+      }))()`, false);
+      await cdp.eval(`(() => {
+        const input = document.querySelector('#chanNewRow input');
+        input.value = 'тестовая-1';
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      })()`, false);
+      await sleep(6000);
+      const after = await cdp.eval(`(() => ({
+        rows: Array.from(document.querySelectorAll('#channelList .chan-row')).map((r) => r.textContent.trim()),
+        title: (document.querySelector('#roomTitle') || {}).textContent || '',
+        chatTitle: (document.querySelector('#chatTitle') || {}).textContent || '',
+        inRoom: !(document.querySelector('#roomScreen') || {}).classList.contains('hidden'),
+      }))()`, false);
+      step('до создания', before);
+      step('поле ввода', editing);
+      step('после создания', after);
+      report.ok = !!editing.hasInput && after.rows.length === 2 && after.title.indexOf('тестовая-1') >= 0 && after.title.indexOf('--') < 0;
     }
 
     if (scenario === 'badpass') {

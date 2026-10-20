@@ -194,14 +194,21 @@
     const setScreen = lp.setScreenShareEnabled.bind(lp);
     lp.setScreenShareEnabled = async function (on, capture, publish) {
       if (!on) return setScreen(on, capture, publish);
-      const profile = GAME_Q[gameProfile()] || GAME_Q.fhd60;
+      const profile = GAME_Q[gameProfile()] || GAME_Q.text;
       const cap = Object.assign({}, capture || {}, {
         resolution: profile.res,
         contentHint: profile.hint,
       });
+      // Системный звук демонстрации отдаём отдельной дорожкой и НЕ воспроизводим
+      // локально: иначе эхоподавление принимает его за эхо и глушит микрофон.
+      if (cap.audio === true || cap.audio === undefined) {
+        cap.audio = { suppressLocalAudioPlayback: true };
+      } else if (cap.audio && typeof cap.audio === 'object') {
+        cap.audio = Object.assign({ suppressLocalAudioPlayback: true }, cap.audio);
+      }
       const pub = Object.assign({}, publish || {}, {
         screenShareEncoding: { maxBitrate: profile.bitrate, maxFramerate: profile.res.frameRate },
-        degradationPreference: 'maintain-framerate', // при слабом канале теряется чёткость, а не кадры
+        degradationPreference: profile.degrade || 'maintain-resolution',
       });
       lastScreenProfile = profile.label;
       toast('Показ экрана: ' + profile.label);
@@ -212,7 +219,11 @@
   if (typeof OrigRoom === 'function') {
     class GuardedRoom extends OrigRoom {
       constructor(options) {
-        super(options);
+        // Не останавливаем дорожку микрофона при выключении: иначе Bluetooth-гарнитура
+        // переключается в режим «телефона» (тихо, узкая полоса), а AGC каждый раз
+        // начинает с нуля — из-за этого звук «сам становится тише».
+        const opts = Object.assign({ stopMicTrackOnMute: false }, options || {});
+        super(opts);
         this.__volnaClosed = false;
         latest = this;
         rooms.add(this);
@@ -236,10 +247,12 @@
           on(LK.RoomEvent.ParticipantConnected, (p) => {
             if (this.__volnaClosed || latest !== this) return;
             chatAdd((p && p.name ? p.name : 'Участник') + ' подключился', '', 'sys');
+            beep('in');
           });
           on(LK.RoomEvent.ParticipantDisconnected, (p) => {
             if (this.__volnaClosed || latest !== this) return;
             chatAdd((p && p.name ? p.name : 'Участник') + ' вышел', '', 'sys');
+            beep('out');
           });
         } catch (e) { /* не критично */ }
         const connect = this.connect.bind(this);
@@ -262,6 +275,7 @@
             active = this;
             inviteAutofilled = false;
             guardParticipant(this);
+            beep('join');
             return res;
           } catch (e) {
             // Вход по ссылке не удался: чаще всего ссылку обрезали при пересылке
@@ -356,7 +370,23 @@
         if (hint) hint.textContent = '';
         // имя комнаты для человека: подкомната и текстовая комната выглядят понятно
         const title = $('#roomTitle');
-        if (title) title.textContent = prettyName(currentRoom());
+        if (title) title.textContent = shortName(currentRoom());
+        // В чате сразу видно, чей он: общей комнаты или конкретной подкомнаты
+        const chatTitle = $('#chatTitle');
+        if (chatTitle) {
+          chatTitle.textContent = shortName(currentRoom());
+          chatTitle.title = 'Чат комнаты «' + shortName(currentRoom()) + '»';
+        }
+        if (SWITCH.active) {
+          SWITCH.active = false;
+          switchOverlay(false);
+        }
+        const backBtn = $('#chatBackBtn');
+        if (backBtn) backBtn.classList.toggle('hidden', !isSubRoom(currentRoom()));
+        try { renderChannels(); } catch (e) { /* не критично */ }
+        if (!isSubRoom(currentRoom()) && store.get('hintSub', '') !== '1') {
+          store.set('hintSub', '1');
+        }
         if (isTextRoom()) {
           showMicWarn('Это текстовая комната: микрофон выключен, история переписки не сохраняется.');
           chatShow(true);
@@ -594,6 +624,50 @@
 
   /* ═══════════ 6. Хост, главное меню, шумоподавление, комнаты, чат ═══════════ */
 
+  /* ---- 6.0. Звуковые сигналы и плавный переход между комнатами ---- */
+
+  let AC = null;
+  /** Короткий сигнал: вход в комнату, участник зашёл или вышел. */
+  function beep(kind) {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      AC = AC || new Ctx();
+      if (AC.state === 'suspended') AC.resume();
+      const now = AC.currentTime;
+      const osc = AC.createOscillator();
+      const gain = AC.createGain();
+      const base = kind === 'out' ? 380 : kind === 'in' ? 640 : 520;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(base, now);
+      osc.frequency.exponentialRampToValueAtTime(base * (kind === 'out' ? 0.72 : 1.26), now + 0.16);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.14, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      osc.connect(gain);
+      gain.connect(AC.destination);
+      osc.start(now);
+      osc.stop(now + 0.24);
+    } catch (e) { /* звук не критичен */ }
+  }
+
+  const SWITCH = { active: false, timer: 0 };
+
+  /** Затенение на время перехода: вместо «стартовой страницы» видна только плашка. */
+  function switchOverlay(on) {
+    let el = document.getElementById('switchOverlay');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'switchOverlay';
+      el.className = 'switch-overlay hidden';
+      el.innerHTML = '<span>Переход в комнату…</span>';
+      document.body.append(el);
+    }
+    el.classList.toggle('hidden', !on);
+    clearTimeout(SWITCH.timer);
+    if (on) SWITCH.timer = setTimeout(() => switchOverlay(false), 9000);
+  }
+
   /* ---- 6.1. Имя хоста: на машине с сервером по умолчанию «Admin» ---- */
 
   function isServerMachine() {
@@ -695,11 +769,17 @@
   function saveBooks() { store.set('rooms', JSON.stringify(ROOMS.books)); }
 
   function cleanRoomName(raw) {
+    // Двойной дефис — разделитель «родитель--подкомната», его нельзя схлопывать.
+    // Сохраняем его через временную метку, чистим остальное и возвращаем назад.
+    const SEP = '~sep~';
     return String(raw || '').trim().toLowerCase()
-      .replace(/[^a-z0-9а-яё._-]/gi, '-')
+      .replace(/--/g, SEP)
+      .replace(/[^a-z0-9а-яё._~-]/gi, '-')
       .replace(/-{2,}/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 32);
+      .replace(/^[-~]|[-~]$/g, '')
+      .replace(new RegExp(SEP, 'g'), '--')
+      .replace(/-{3,}/g, '--')
+      .slice(0, 40);
   }
 
   const SUB_SEP = '--';
@@ -823,6 +903,8 @@
     closeMenu();
     if (inRoom()) {
       ROOMS.pending = target;
+      SWITCH.active = true;
+      switchOverlay(true);
       const leaveBtn = $('#leaveBtn');
       if (leaveBtn) leaveBtn.click();
     } else {
@@ -999,15 +1081,23 @@
   /* ---- 6.5. Профили демонстрации экрана (для игр и видео) ---- */
 
   const GAME_Q = {
-    fhd60: { label: '1080p · 60 кадров/с · плавно', res: { width: 1920, height: 1080, frameRate: 60 }, bitrate: 8000000, hint: 'motion' },
-    hd60: { label: '720p · 60 кадров/с · плавно (слабее канал)', res: { width: 1280, height: 720, frameRate: 60 }, bitrate: 4000000, hint: 'motion' },
-    qhd60: { label: '1440p · 60 кадров/с · максимально', res: { width: 2560, height: 1440, frameRate: 60 }, bitrate: 12000000, hint: 'motion' },
-    text: { label: 'Текст и документы · детально', res: { width: 1920, height: 1080, frameRate: 30 }, bitrate: 4500000, hint: 'detail' },
+    // По умолчанию — документы и слайды: для выступающего важнее чёткость текста,
+    // а не 60 кадров. Игры выбираются отдельно в меню.
+    text: {
+      label: 'Документы и слайды · чётко',
+      res: { width: 2560, height: 1440, frameRate: 20 },
+      bitrate: 6000000,
+      hint: 'detail',
+      degrade: 'maintain-resolution',
+    },
+    fhd60: { label: '1080p · 60 кадров · плавно', res: { width: 1920, height: 1080, frameRate: 60 }, bitrate: 6000000, hint: 'motion', degrade: 'maintain-framerate' },
+    hd60: { label: '720p · 60 кадров · экономия', res: { width: 1280, height: 720, frameRate: 60 }, bitrate: 2500000, hint: 'motion', degrade: 'maintain-framerate' },
+    qhd60: { label: '1440p · 60 кадров · максимум', res: { width: 2560, height: 1440, frameRate: 60 }, bitrate: 12000000, hint: 'motion', degrade: 'maintain-framerate' },
   };
 
   function gameProfile() {
-    const key = store.get('gameQ', 'fhd60');
-    return GAME_Q[key] ? key : 'fhd60';
+    const key = store.get('gameQ', 'text');
+    return GAME_Q[key] ? key : 'text';
   }
 
   function fillGameSelect() {
@@ -1069,8 +1159,13 @@
   function chatShow(show) {
     CHAT.open = !!show;
     const panel = $('#chatPanel');
+    // Чат живёт внизу списка участников и не прячется полностью:
+    // свёрнутое состояние — только заголовок со счётчиком, без отдельного окна.
+    if (panel) {
+      panel.classList.remove('hidden');
+      panel.classList.toggle('collapsed', !CHAT.open);
+    }
     const toggle = $('#chatToggle');
-    if (panel) panel.classList.toggle('hidden', !CHAT.open);
     if (toggle) toggle.checked = CHAT.open;
     if (CHAT.open) {
       CHAT.unread = 0;
@@ -1095,6 +1190,7 @@
   }
 
   function onChatData(payload, participant, topic) {
+    if (topic === FILES.topic) { onFileData(payload, participant); return; }
     if (topic && topic !== CHAT.topic) return;
     let msg = null;
     try { msg = JSON.parse(new TextDecoder().decode(payload)); } catch (e) { return; }
@@ -1109,6 +1205,205 @@
     if (msg.t !== 'msg' || !msg.text) return;
     chatAdd(String(msg.text).slice(0, 500), (participant && participant.name) || msg.name || 'Гость', 'other', msg.id);
   }
+
+  /* ---- 6.6a. Файлы в чате: любой тип, передача по каналам данных ---- */
+
+  const FILES = {
+    topic: 'volna-file',
+    chunk: 8 * 1024,              // кусок исходного файла — с запасом под лимит пакета
+    max: 8 * 1024 * 1024,         // больше не отправляем: канал данных не для гигабайтов
+    incoming: new Map(),
+  };
+
+  function fileId() {
+    return 'f' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function humanSize(bytes) {
+    const n = Number(bytes) || 0;
+    if (n < 1024) return n + ' Б';
+    if (n < 1048576) return Math.round(n / 1024) + ' КБ';
+    return (n / 1048576).toFixed(1) + ' МБ';
+  }
+
+  function bytesToB64(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+
+  function b64ToBytes(text) {
+    const bin = atob(String(text || ''));
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function fileRow(id) {
+    const log = $('#chatLog');
+    if (!log) return null;
+    return log.querySelector('[data-file="' + id + '"]');
+  }
+
+  function chatFileRow(id, name, size, who, kind) {
+    const log = $('#chatLog');
+    if (!log) return;
+    const row = document.createElement('div');
+    row.className = 'chat-msg' + (kind === 'me' ? ' mine' : '');
+    row.dataset.file = id;
+    const head = document.createElement('div');
+    head.className = 'file-name';
+    head.textContent = '📎 ' + String(name || 'файл').slice(0, 80) + ' · ' + humanSize(size);
+    const st = document.createElement('div');
+    st.className = 'file-status muted small';
+    st.textContent = 'передаётся…';
+    row.append(head, st);
+    if (who) {
+      const w = document.createElement('span');
+      w.className = 'chat-who';
+      w.textContent = who;
+      row.prepend(w);
+    }
+    log.append(row);
+    while (log.children.length > CHAT.max) log.removeChild(log.firstChild);
+    chatScroll();
+  }
+
+  function chatFileStatus(id, text) {
+    const row = fileRow(id);
+    if (!row) return;
+    const st = row.querySelector('.file-status');
+    if (st) st.textContent = text;
+  }
+
+  function chatFileDone(id, blob, name, mime, kind) {
+    const row = fileRow(id);
+    if (!row) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = String(name || 'file');
+    link.className = 'file-link';
+    link.textContent = 'Скачать';
+    const st = row.querySelector('.file-status');
+    if (st) st.textContent = '';
+    row.append(link);
+    if (/^image\//.test(mime || '')) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = String(name || '');
+      img.className = 'chat-img';
+      img.loading = 'lazy';
+      row.append(img);
+    }
+    // ссылка живёт, пока открыт чат; освобождаем при закрытии вкладки
+    window.addEventListener('beforeunload', () => { try { URL.revokeObjectURL(url); } catch (e) { /* уже нет */ } });
+  }
+
+  async function fileSend(file) {
+    if (!file) return;
+    if (!active) { toast('Файлы можно отправлять, находясь в комнате', 'error'); return; }
+    if (file.size > FILES.max) {
+      toast('Файл больше ' + humanSize(FILES.max) + ' — так не отправить', 'error');
+      return;
+    }
+    const id = fileId();
+    const parts = Math.max(1, Math.ceil(file.size / FILES.chunk));
+    chatFileRow(id, file.name, file.size, myName(), 'me');
+    const send = (obj) => active.localParticipant.publishData(
+      new TextEncoder().encode(JSON.stringify(obj)),
+      { reliable: true, topic: FILES.topic }
+    );
+    try {
+      await send({ t: 'f', k: 'begin', id: id, name: file.name, size: file.size, mime: file.type || '', parts: parts });
+      const buf = new Uint8Array(await file.arrayBuffer());
+      for (let i = 0; i < parts; i++) {
+        const slice = buf.subarray(i * FILES.chunk, Math.min(buf.length, (i + 1) * FILES.chunk));
+        await send({ t: 'f', k: 'part', id: id, d: bytesToB64(slice) });
+        if (i % 10 === 0 || i === parts - 1) chatFileStatus(id, 'передаётся… ' + Math.round(((i + 1) / parts) * 100) + '%');
+      }
+      await send({ t: 'f', k: 'end', id: id });
+      chatFileDone(id, file, file.name, file.type || '', 'me');
+    } catch (e) {
+      chatFileStatus(id, 'не удалось отправить: ' + ((e && e.message) || e));
+      toast('Файл не отправился: ' + ((e && e.message) || e), 'error');
+    }
+  }
+
+  function onFileData(payload, participant) {
+    let msg = null;
+    try { msg = JSON.parse(new TextDecoder().decode(payload)); } catch (e) { return; }
+    if (!msg || msg.t !== 'f') return;
+    const who = (participant && participant.name) || 'Гость';
+    if (msg.k === 'begin') {
+      FILES.incoming.set(msg.id, { name: msg.name, size: msg.size, mime: msg.mime, parts: msg.parts, chunks: [], got: 0, who: who });
+      chatFileRow(msg.id, msg.name, msg.size, who, 'other');
+      return;
+    }
+    const item = FILES.incoming.get(msg.id);
+    if (!item) return;
+    if (msg.k === 'part') {
+      item.chunks.push(b64ToBytes(msg.d));
+      item.got += 1;
+      chatFileStatus(msg.id, 'принимается… ' + Math.round((item.got / Math.max(1, item.parts)) * 100) + '%');
+      return;
+    }
+    if (msg.k === 'end') {
+      const blob = new Blob(item.chunks, { type: item.mime || 'application/octet-stream' });
+      FILES.incoming.delete(msg.id);
+      chatFileStatus(msg.id, '');
+      chatFileDone(msg.id, blob, item.name, item.mime, 'other');
+    }
+  }
+
+  function bindSubroomActions() {
+    // Один обработчик на документ: кнопки работают даже если панель чата
+    // переехала в другое место или была перерисована.
+    if (window.__volnaSubHandlers) return;
+    window.__volnaSubHandlers = true;
+    document.addEventListener('click', (e) => {
+      const target = e.target && e.target.closest ? e.target.closest('[data-volna-action]') : null;
+      if (!target) return;
+      const action = target.getAttribute('data-volna-action');
+      if (action === 'new-room') { e.preventDefault(); openNewRoomInput(); }
+      if (action === 'back') {
+        e.preventDefault();
+        const parent = parentOf(currentRoom());
+        switchToRoom(parent || 'main');
+      }
+      if (action === 'collapse') { e.preventDefault(); chatShow(!CHAT.open); }
+    });
+  }
+
+  function bindChatFiles() {
+    // Встраиваем чат внизу колонки с участниками: отдельного окна больше нет
+    const panel = $('#chatPanel');
+    const side = document.querySelector('.side');
+    if (panel && side && panel.parentElement !== side) side.append(panel);
+
+    const input = $('#chatFile');
+    if (input) {
+      input.addEventListener('change', () => {
+        Array.prototype.slice.call(input.files || []).forEach((f) => fileSend(f));
+        input.value = '';
+      });
+    }
+    const box = $('#chatPanel');
+    if (box) {
+      ['dragenter', 'dragover'].forEach((ev) => box.addEventListener(ev, (e) => {
+        e.preventDefault();
+        box.classList.add('drop');
+      }));
+      ['dragleave', 'drop'].forEach((ev) => box.addEventListener(ev, (e) => {
+        e.preventDefault();
+        if (ev === 'drop' && e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+          Array.prototype.slice.call(e.dataTransfer.files).forEach((f) => fileSend(f));
+        }
+        box.classList.remove('drop');
+      }));
+    }
+  }
+
 
   /* ---- 6.5. Главное меню ---- */
 
@@ -1416,17 +1711,139 @@
     renderSubs();
   }
 
-  function announceSub(name) {
+  async function announceSub(name) {
     if (!active) return;
     try {
-      active.localParticipant.publishData(
+      // Ждём фактической отправки: раньше переключение комнаты закрывало канал
+      // раньше, чем уходило сообщение, и остальные о подкомнате не узнавали.
+      await active.localParticipant.publishData(
         new TextEncoder().encode(JSON.stringify({ t: 'sub', name: name })),
         { reliable: true, topic: CHAT.topic }
       );
     } catch (e) { /* остальные узнают при следующем обмене */ }
   }
 
+  /** Своё название комнаты (только на этом устройстве): комната на сервере зовётся иначе. */
+  function roomAlias(id) {
+    try {
+      const map = JSON.parse(store.get('aliases', '{}'));
+      return (map && map[id]) || '';
+    } catch (e) { return ''; }
+  }
+
+  function setRoomAlias(id, name) {
+    let map = {};
+    try { map = JSON.parse(store.get('aliases', '{}')) || {}; } catch (e) { map = {}; }
+    if (name) map[id] = String(name).slice(0, 40); else delete map[id];
+    store.set('aliases', JSON.stringify(map));
+    try { renderChannels(); } catch (e) { /* не критично */ }
+    const title = $('#roomTitle');
+    if (title) title.textContent = displayName(currentRoom());
+    const chatTitle = $('#chatTitle');
+    if (chatTitle) chatTitle.textContent = displayName(currentRoom());
+  }
+
+  function displayName(id) {
+    return roomAlias(id) || prettyName(id);
+  }
+
+  /** Короткое имя для узких мест интерфейса: «main» или имя подкомнаты, без длинных цепочек. */
+  function shortName(id) {
+    const alias = roomAlias(id);
+    if (alias) return alias;
+    if (isSubRoom(id)) return String(id).split(SUB_SEP).pop();
+    return String(id || 'main');
+  }
+
+  /** Поле «новая подкомната» прямо в списке комнат: без диалогов и перезагрузок. */
+  function openNewRoomInput() {
+    const box = $('#channelList');
+    if (!box) return;
+    const existing = $('#chanNewRow');
+    if (existing) { const f = existing.querySelector('input'); if (f) f.focus(); return; }
+
+    const row = document.createElement('div');
+    row.id = 'chanNewRow';
+    row.className = 'chan-row editing';
+    const input = document.createElement('input');
+    input.className = 'chan-input';
+    input.maxLength = 32;
+    input.placeholder = 'название';
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'chan-ok';
+    ok.textContent = '✓';
+    row.append(input, ok);
+    box.append(row);
+
+    const submit = () => {
+      const name = cleanRoomName(input.value);
+      if (!name) { input.focus(); return; }
+      row.remove();
+      const field = $('#newSubInput');
+      if (field) field.value = name;
+      createSub();
+    };
+    ok.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+      if (e.key === 'Escape') { e.preventDefault(); row.remove(); }
+    });
+    setTimeout(() => input.focus(), 30);
+  }
+
+  /** Левая колонка в стиле Discord: текущая комната, её подкомнаты и вход по клику. */
+  function renderChannels() {
+    const box = $('#channelList');
+    if (!box) return;
+    box.innerHTML = '';
+    const here = currentRoom();
+    const parent = isSubRoom(here) ? parentOf(here) : here;
+
+    const rows = [{ id: parent, label: prettyName(parent), current: here === parent, main: true }];
+    subsOf(parent).forEach((sub) => {
+      const id = parent + SUB_SEP + sub;
+      rows.push({ id: id, label: sub, current: here === id, main: false });
+    });
+
+    rows.forEach((r) => {
+      const row = document.createElement('div');
+      row.className = 'chan-row' + (r.current ? ' current' : '') + (r.main ? '' : ' sub');
+      const mark = document.createElement('span');
+      mark.className = 'hash';
+      mark.textContent = r.main ? '▣' : '└';
+      const label = document.createElement('span');
+      label.className = 'chan-name';
+      label.textContent = shortName(r.id);
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'chan-edit';
+      edit.title = 'Переименовать';
+      edit.textContent = '✎';
+      edit.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const next = window.prompt('Новое название комнаты', displayName(r.id));
+        if (next == null) return;
+        setRoomAlias(r.id, String(next).trim());
+      });
+      row.append(mark, label, edit);
+      row.title = r.main ? 'Общая комната' : 'Подкомната: свой звук и свой чат';
+      row.addEventListener('click', () => switchToRoom(r.id));
+      row.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        const next = window.prompt('Новое название комнаты', displayName(r.id));
+        if (next != null) setRoomAlias(r.id, String(next).trim());
+      });
+      box.append(row);
+    });
+
+    const title = $('#chanRoomName');
+    if (title) title.textContent = shortName(here);
+  }
+
   function renderSubs() {
+    // список комнат — украшение: даже если он упадёт, вход в комнату должен работать
+    try { renderChannels(); } catch (e) { /* не критично */ }
     const box = $('#subList');
     if (!box) return;
     box.innerHTML = '';
@@ -1475,16 +1892,16 @@
     });
   }
 
-  function createSub() {
+  async function createSub() {
     const input = $('#newSubInput');
     const sub = cleanRoomName(input && input.value);
     if (!sub) { toast('Название подкомнаты: буквы, цифры, дефис', 'error'); return; }
     const parent = isSubRoom(currentRoom()) ? parentOf(currentRoom()) : currentRoom();
     const id = addSub(parent, sub);
     if (input) input.value = '';
-    if (inRoom()) announceSub(sub); // общая комната узнает о новой подкомнате
-    renderSubs();
-    toast('Подкомната «' + sub + '» готова — входим');
+    renderSubs(); // строка появляется сразу — без ожидания сети
+    if (inRoom()) await announceSub(sub); // общая комната узнает о новой подкомнате
+    toast('Комната «' + sub + '»');
     switchToRoom(id);
   }
 
@@ -1537,6 +1954,10 @@
     bindBanner();
     bindInviteButton();
     bindMenu();
+    bindChatFiles();
+    bindSubroomActions();
+    // Чат виден сразу: он часть комнаты, а не спрятанная за кнопкой панель
+    if (store.get('chat', '1') !== '0') chatShow(true);
     loadBooks();
     loadSubs();
     loadFriends();

@@ -1,4 +1,4 @@
-﻿# «Волна» — ярлыки на рабочем столе Windows.
+# «Волна» — ярлыки на рабочем столе Windows.
 #
 #   create-shortcut.cmd                             ярлык «Волна»
 #   create-shortcut.cmd -InviteUrl "https://...#i=…" дополнительно «Волна — приглашение»
@@ -57,6 +57,11 @@ function New-Lnk($path, $arguments, $description, $target = 'powershell.exe') {
 # Если установлено настольное приложение (desktop + Electron), ярлык «Волна»
 # открывает его собственное окно вместо окна браузера.
 $electron = Join-Path $root 'desktop\node_modules\electron\dist\electron.exe'
+if (-not (Test-Path $electron)) {
+  # библиотеки Electron могли перенести на другой диск (ссылка не всегда создаётся)
+  $alt = 'D:\Volna-Parts\voice-app-desktop-node_modules\electron\dist\electron.exe'
+  if (Test-Path $alt) { $electron = $alt }
+}
 $desktopApp = Join-Path $root 'desktop'
 $useNative = Test-Path $electron
 

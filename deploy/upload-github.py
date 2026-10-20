@@ -27,6 +27,14 @@ AUTH = os.environ.get("GH_TOKEN", "").strip()
 REPO = os.environ.get("GH_REPO", "").strip()
 BRANCH = os.environ.get("GH_BRANCH", "main").strip() or "main"
 MESSAGE = os.environ.get("GH_MESSAGE", "Волна: голосовая комната, стриминг и настольное приложение")
+# GitHub иногда резолвится в IPv6, а маршрута нет: принудительно используем IPv4
+import socket as _socket
+_orig_getaddrinfo = _socket.getaddrinfo
+def _ipv4_only(*args, **kwargs):
+    result = _orig_getaddrinfo(*args, **kwargs)
+    return [x for x in result if x[0] == _socket.AF_INET] or result
+_socket.getaddrinfo = _ipv4_only
+
 API = "https://api.github.com"
 
 SKIP_DIRS = {"node_modules", ".zwork", "build", "runtime", ".git", "certs", "run", "tmp-certs", "__pycache__"}

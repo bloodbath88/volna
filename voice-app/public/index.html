@@ -8,6 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -101,6 +102,21 @@
     </div>
   </header>
 
+  <aside class="channels" id="channels">
+    <div class="chan-head">
+      <span class="chan-room" id="chanRoomName">main</span>
+      <button id="chanAddBtn" class="icon-btn" type="button" data-volna-action="new-room" title="Создать подкомнату" aria-label="Создать подкомнату">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12"/><path d="M6 12h12"/></svg>
+      </button>
+    </div>
+    <div class="chan-scroll">
+      <div class="chan-title">Голосовые комнаты</div>
+      <div id="channelList" class="channel-list"></div>
+      <div class="side-head"><h2>Участники</h2><span id="countBadge" class="badge">1</span></div>
+      <div id="people" class="people"></div>
+    </div>
+  </aside>
+
   <section class="stage">
     <div id="stageWrap" class="stage-wrap hidden">
       <video id="stageVideo" autoplay playsinline muted></video>
@@ -116,13 +132,7 @@
     <div id="grid" class="grid"></div>
   </section>
 
-  <aside class="side">
-    <div class="side-head">
-      <h2>Участники</h2>
-      <span id="countBadge" class="badge">1</span>
-    </div>
-    <div id="people" class="people"></div>
-  </aside>
+  <aside class="side"></aside>
 
   <footer class="controls">
     <button id="micBtn" class="ctl" type="button" title="Микрофон — M">
@@ -248,15 +258,31 @@
     <span id="micWarnText">Микрофон выключен.</span>
   </div>
 
-  <aside id="chatPanel" class="chat-panel hidden">
+  <aside id="chatPanel" class="chat-panel">
     <div class="chat-head">
-      <span>Чат комнаты</span>
-      <button id="chatCloseBtn" class="btn ghost small" type="button">Свернуть</button>
+      <span id="chatTitle" class="chat-title">Чат</span>
+      <span class="chat-actions">
+        <button id="chatSubBtn" class="icon-btn" type="button" data-volna-action="new-room" title="Создать подкомнату: свой звук и свой чат" aria-label="Создать подкомнату">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12"/><path d="M6 12h12"/></svg>
+        </button>
+        <button id="chatBackBtn" class="icon-btn hidden" type="button" data-volna-action="back" title="Вернуться в общую комнату" aria-label="Вернуться в общую комнату">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6l-6 6 6 6"/><path d="M4 12h11a4 4 0 0 1 4 4v3"/></svg>
+        </button>
+        <label class="icon-btn" id="chatFileBtn" title="Прикрепить файл" aria-label="Прикрепить файл">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12.4l6.1-6.1a2.6 2.6 0 0 1 3.7 3.7l-7.3 7.3a4.2 4.2 0 0 1-5.9-5.9l7-7"/></svg>
+          <input id="chatFile" type="file" multiple hidden>
+        </label>
+        <button id="chatCloseBtn" class="icon-btn" type="button" data-volna-action="collapse" title="Свернуть чат" aria-label="Свернуть чат">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg>
+        </button>
+      </span>
     </div>
     <div id="chatLog" class="chat-log" aria-live="polite"></div>
     <form id="chatForm" class="chat-form">
       <input id="chatInput" maxlength="500" autocomplete="off" placeholder="Сообщение…">
-      <button class="btn primary small" type="submit">Отправить</button>
+      <button class="icon-btn send" type="submit" title="Отправить" aria-label="Отправить">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>
+      </button>
     </form>
   </aside>
 
