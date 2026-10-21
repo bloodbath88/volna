@@ -1,0 +1,13 @@
+[Unit]
+Description=Volna HTTP to HTTPS redirect
+After=network.target
+
+[Service]
+Environment=DOMAIN=volna.is-cool.dev
+Environment=PORT=80
+ExecStart=/opt/volna/runtime/node/bin/node /opt/volna/server/redirect.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

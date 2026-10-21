@@ -1,9 +1,18 @@
-# Volna 1.5.0 — domain, battle wallpaper, tidier chat row
+# Volna 1.5.1 — everything on the domain
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.5.1
+
+- **HTTP → HTTPS redirect.** A small service (`server/redirect.js`, unit `volna-redirect`)
+  answers on port 80 and sends every request to `https://volna.is-cool.dev`.
+- **Invites use the domain.** The address list that the “Invite” button reads puts the domain
+  first, so shared links point at the domain rather than an IP.
+- **Certificate renewal hook** restarts the application after `certbot renew`, so a renewed
+  certificate is picked up automatically.
 
 ## What's new in 1.5.0
 
@@ -144,8 +153,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-2e81fbe574371c1fb900f61b79a3d5f2b4c2e9c4d6d4739c2815208420535f43  volna-voice-app.zip
-851615e12a478f7f60f2a8ccd0b2895d055ebebab62a6d794232669674dd262a  volna-voice-app-linux.tar.gz
+0410f6a09996f1f51d8de7385d8b7453a3dc771afa7ded99f34d14b3eb209b87  volna-voice-app.zip
+3266f9fca4aa3f76597824ffd787e04aa9362b171a62c143f7daef506d6f5104  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)
