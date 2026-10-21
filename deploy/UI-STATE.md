@@ -104,3 +104,12 @@
 - Фоны: `bg/kadran.jpg` (комната, шесть героев на арене), `bg/nightstalker.jpg` (вход: лысая голова, уши вампира).
 - Сейчас в работе: перенос кнопки «прикрепить» в строку ввода; кандидат новых обоев на согласовании (файл `deploy/bg-candidate.jpg`).
 - Тесты драйвера: join, invite, chat, subcreate, subdelete, flatsubs, multilock, pingtest, toastmute.
+
+## Домен подключён (21.10.2026)
+
+- Новый адрес: **https://volna.is-cool.dev** (порт 443, сертификат Let's Encrypt, действует до 19.01.2027, продление автоматическое).
+- Ссылка-приглашение: https://volna.is-cool.dev/#i=eyJyIjoibWFpbiIsImsiOiJ2b2xuYS0yNDg3In0
+- Старый адрес https://31.76.29.68:8443 больше не обслуживается — приложение переведено на 443.
+- DNS: volna.is-cool.dev → 31.76.29.68 (OpenDomains, заявка e69cae16-d578-41f7-a8b6-64510a785609).
+- Проверено: join, chat, subcreate на домене — OK; пинг 65 мс; обои комнаты заменены на панораму Radiant/Dire.
+- Кнопка «прикрепить» перенесена в строку ввода (слева от отправки).

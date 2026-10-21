@@ -1,9 +1,17 @@
-# Volna 1.4.4 — no phantom “Client initiated disconnect”
+# Volna 1.5.0 — domain, battle wallpaper, tidier chat row
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.5.0
+
+- **Custom domain.** The server now answers on `https://volna.is-cool.dev` with a Let's Encrypt
+  certificate (auto-renewed), port 443, no browser warnings.
+- **New room backdrop.** A panoramic battlefield in the spirit of Dota 2: a stone bridge over a
+  glowing river, a Radiant tower with green runes, a Dire tower in fire, armies in the fog.
+- **Attach button moved** into the message row, right next to Send.
 
 ## What's new in 1.4.4
 
@@ -136,8 +144,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-30b0408f242c8e857b0fcb7da30ee49cabb442a179dbf87afdf9ecb640249deb  volna-voice-app.zip
-c6223073385afb46afbd1301246a235c3adec0902dbe42e1db378870b0a5a54f  volna-voice-app-linux.tar.gz
+2e81fbe574371c1fb900f61b79a3d5f2b4c2e9c4d6d4739c2815208420535f43  volna-voice-app.zip
+851615e12a478f7f60f2a8ccd0b2895d055ebebab62a6d794232669674dd262a  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)
