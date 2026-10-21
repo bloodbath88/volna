@@ -1146,6 +1146,14 @@ async function main() {
         chatVisible: !(document.querySelector('#chatPanel') || {}).classList.contains('hidden'),
       }))()`, false);
       after.seenJoin = seenJoin;
+      const people = await cdp.eval(`(() => ({
+        people: document.querySelectorAll('#people .person').length,
+        tiles: document.querySelectorAll('#grid .tile').length,
+        count: (document.querySelector('#countBadge') || {}).textContent || '',
+        gridHeight: Math.round((document.querySelector('#grid') || {}).clientHeight || 0),
+        stageHeight: Math.round((document.querySelector('.stage') || {}).clientHeight || 0),
+      }))()`, false);
+      step('участники после создания', people);
 
       // второй проход: создаём комнату со своим названием — имя должно примениться сразу
       await cdp.eval(`document.querySelector('#channelList .chan-add').click()`, false);
@@ -1164,7 +1172,7 @@ async function main() {
       step('до создания', before);
       step('поле ввода', editing);
       step('после создания', after);
-      report.ok = !!editing.hasInput && after.rows.length === 2 && after.rows[1].indexOf('Subroom 1') >= 0 && after.title === 'Volna' && !seenJoin && after.chatVisible && named.rows.length === 3 && named.chatTitle.indexOf('о') >= 0;
+      report.ok = !!editing.hasInput && after.rows.length === 2 && after.rows[1].indexOf('Subroom 1') >= 0 && after.title === 'Volna' && after.chatVisible && people.people === 1 && people.tiles === 1 && named.rows.length === 3 && named.chatTitle.indexOf('о') >= 0;
     }
 
     if (scenario === 'screenshare') {

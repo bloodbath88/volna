@@ -397,12 +397,6 @@
       let hidden = js.classList.contains('hidden');
       new MutationObserver(() => {
         const now = js.classList.contains('hidden');
-        // Мгновенный переход: пока идёт смена комнаты, экран входа не показываем
-        if (SWITCH.active && !now) {
-          js.classList.add('hidden');
-          const room = $('#roomScreen');
-          if (room) room.classList.remove('hidden');
-        }
         if (hidden && !now) setTimeout(afterLeave, 0); // приложение вернулось на экран входа
         hidden = now;
       }).observe(js, { attributes: true, attributeFilter: ['class'] });
@@ -1144,6 +1138,7 @@
     if (inRoom()) {
       ROOMS.pending = target;
       SWITCH.active = true;
+      switchOverlay(true);
       const leaveBtn = $('#leaveBtn');
       if (leaveBtn) leaveBtn.click();
     } else {

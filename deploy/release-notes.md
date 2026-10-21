@@ -1,9 +1,17 @@
-# Volna 1.5.1 — everything on the domain
+# Volna 1.5.2 — participant stays visible after creating a room
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.5.2
+
+- **Fixed: the participant disappeared after creating a sub-room.** The room switch used to
+  hide the sign-in screen to avoid a flash; that skipped the client's re-render, so tiles and the
+  participant list stayed empty while the counter showed 1. The screen now runs its normal flow
+  and a short overlay covers the transition instead.
+- Verified on the domain: after creating a room there is 1 tile and 1 row in Participants.
 
 ## What's new in 1.5.1
 
@@ -153,8 +161,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-0410f6a09996f1f51d8de7385d8b7453a3dc771afa7ded99f34d14b3eb209b87  volna-voice-app.zip
-3266f9fca4aa3f76597824ffd787e04aa9362b171a62c143f7daef506d6f5104  volna-voice-app-linux.tar.gz
+b24a429105bbcf68e6f129764a76142e277399a62a6a73fd4398c7098bc10e4a  volna-voice-app.zip
+fecb826c13a587de34828aab7983fc7f1bb245fc5b8f3c63c7b2941d94d209b8  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)
