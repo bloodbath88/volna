@@ -1334,6 +1334,53 @@ async function main() {
       report.ok = !left.some((t) => /client initiated disconnect/i.test(t));
     }
 
+    if (scenario === 'subswitch2') {
+      // два участника: один остаётся в Основном, второй создаёт подкомнату
+      await open();
+      await fill();
+      await cdp.eval(clickJoin, false);
+      const a = await waitFor(cdp, inRoom, 20000, 500);
+      const pageB = await newPage(DEBUG_PORT);
+      const cdpB = await Cdp.connect(pageB.webSocketDebuggerUrl);
+      await cdpB.send('Runtime.enable');
+      await cdpB.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__volnaAllowMulti = true;' });
+      await cdpB.send('Page.navigate', { url: BASE + '/?room=' + encodeURIComponent(room) });
+      for (let i = 0; i < 24; i++) {
+        await sleep(500);
+        const ready = await cdpB.eval("!!document.querySelector('#joinBtn')", false);
+        if (ready) break;
+      }
+      await sleep(300);
+      await cdpB.eval(setJoinFields('Второй', pass, room), false);
+      await cdpB.eval(clickJoin, false);
+      const b = await waitFor(cdpB, inRoom, 20000, 500);
+      step('оба в комнате', { a: a.roomVisible, b: b.roomVisible, peopleA: a.people, peopleB: b.people });
+      // второй создаёт подкомнату
+      await cdpB.eval(`document.querySelector('#channelList .chan-add').click()`, false);
+      await sleep(400);
+      await cdpB.eval(`(() => {
+        const input = document.querySelector('#chanNewRow input');
+        input.value = 'тест-переход';
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      })()`, false);
+      await sleep(5000);
+      const afterB = await cdpB.eval(`(() => ({
+        people: document.querySelectorAll('#people .person').length,
+        tiles: document.querySelectorAll('#grid .tile').length,
+        room: (document.querySelector('#chanTitle') || {}).textContent || '',
+        inRoom: !(document.querySelector('#roomScreen') || {}).classList.contains('hidden'),
+      }))()`, false);
+      const afterA = await cdp.eval(`(() => ({
+        people: document.querySelectorAll('#people .person').length,
+        tiles: document.querySelectorAll('#grid .tile').length,
+        inRoom: !(document.querySelector('#roomScreen') || {}).classList.contains('hidden'),
+      }))()`, false);
+      step('после перехода (создатель)', afterB);
+      step('после перехода (оставшийся)', afterA);
+      report.ok = afterB.inRoom && afterB.people >= 1 && afterB.tiles >= 1 && afterA.inRoom && afterA.people >= 1;
+      cdpB.close();
+    }
+
     if (scenario === 'badpass') {
       await open();
       await cdp.eval(setJoinFields(name, 'неверный-пароль-123', room), false);

@@ -133,3 +133,13 @@
 - Репозиторий: bloodbath88/volna, релизы до v1.5.1.
 - Службы на сервере: volna, volna-redirect, coturn — все active.
 - Известная проблема (в работе): после создания подкомнаты пропадает участник в интерфейсе (счётчик 1, но нет плиток и строки в «Участниках»).
+
+## Сводка на 21.10.2026 (вместо удаляемых скриншотов)
+
+- Прод: https://volna.is-cool.dev (443, Let's Encrypt до 19.01.2027, автопродление + хук restart volna), http→https через volna-redirect (80).
+- Пароль комнаты: volna-2487. Комната main, подпись «Основной».
+- Заявка на домен: e69cae16-d578-41f7-a8b6-64510a785609.
+- Репозиторий bloodbath88/volna, релизы до v1.5.2; заметки и README на английском.
+- static отдаётся с Cache-Control max-age=3600 — после деплоя нужен cache-busting (?v=) или Ctrl+F5; service worker ничего не кэширует.
+- Известная проблема: «после создания подкомнаты пропадает участник» — воспроизведено (people 0, tiles 0, gridHeight 0), после правки на локали и домене people/tiles = 1; у пользователя может быть старая версия из кэша.
+- Тесты: join, invite, chat, subcreate, subdelete, flatsubs, multilock, pingtest, toastmute.
