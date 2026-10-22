@@ -453,3 +453,10 @@ button,input,select{font:inherit;color:inherit}
 .pass-eye:hover{color:var(--text);background:var(--panel2)}
 .pass-eye.on{color:var(--accent)}
 .pass-eye svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* запомнить меня */
+.auth-remember{display:flex;align-items:center;gap:9px;margin:2px 0 4px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
+.auth-remember input{appearance:none;width:16px;height:16px;border:1px solid var(--line);border-radius:5px;background:var(--panel2);position:relative;cursor:pointer;flex:0 0 auto}
+.auth-remember input:checked{background:var(--accent);border-color:var(--accent)}
+.auth-remember input:checked::after{content:'';position:absolute;left:5px;top:2px;width:4px;height:8px;border:solid #0b120b;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.auth-remember:hover span{color:var(--text)}

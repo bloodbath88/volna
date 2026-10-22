@@ -484,7 +484,7 @@
       if (field) { field.classList.add('hidden'); field.dataset.byInvite = '1'; }
     }
     if (nameInput && !nameInput.value.trim()) {
-      nameInput.value = store.get('name', '') || ('Гость-' + (1000 + Math.floor(Math.random() * 9000)));
+      nameInput.value = store.get('name', '') || (typeof AUTH !== 'undefined' && AUTH.login ? AUTH.login : '');
     }
     store.set('room', inv.room);
     if (inv.key && !PRIV.anon) {
@@ -999,13 +999,18 @@
     return null;
   }
 
-  function setSession(login) {
-    store.set('session', JSON.stringify({ login: login, until: Date.now() + 30 * 86400000 }));
+  function setSession(login, remember) {
+    try {
+      if (remember) localStorage.setItem('volna.remember', login);
+      else localStorage.removeItem('volna.remember');
+    } catch (e) { /* приватный режим */ }
+    store.set('session', JSON.stringify({ login: login, until: Date.now() + (remember ? 365 : 1) * 86400000, remember: !!remember }));
     AUTH.login = login;
   }
 
   function dropSession() {
     store.set('session', '');
+    try { localStorage.removeItem('volna.remember'); } catch (e) { /* уже пусто */ }
     AUTH.login = '';
   }
 
@@ -1033,6 +1038,8 @@
       '  <label class="field"><span>Логин</span><input id="authLogin" autocomplete="username" maxlength="24"></label>',
       '  <label class="field"><span>Пароль</span><input id="authPass" type="password" autocomplete="current-password" maxlength="64"></label>',
       '  <label class="field hidden" id="authPass2Field"><span>Повторите пароль</span><input id="authPass2" type="password" maxlength="64"></label>',
+      '  <label class="auth-remember"><input type="checkbox" id="authRemember" checked>',
+      '    <span>Запомнить меня — входить автоматически</span></label>',
       '  <p class="auth-error" id="authError"></p>',
       '  <button class="btn primary" type="submit" id="authSubmit">Войти</button>',
       '</form>',
@@ -1044,6 +1051,10 @@
     const err = box.querySelector('#authError');
     const submit = box.querySelector('#authSubmit');
     const pass2Field = box.querySelector('#authPass2Field');
+    try {
+      const savedLogin = localStorage.getItem('volna.remember') || '';
+      if (savedLogin) box.querySelector('#authLogin').value = savedLogin;
+    } catch (e) { /* приватный режим */ }
 
     box.querySelectorAll('[data-mode]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -1075,12 +1086,12 @@
         if (pass !== pass2) { err.textContent = 'Пароли не совпадают'; return; }
         users[login] = { hash: await hashPassword(login, pass), created: Date.now() };
         saveUsers(users);
-        setSession(login);
+        setSession(login, box.querySelector('#authRemember').checked);
       } else {
         if (!users[login]) { err.textContent = 'Пользователь не найден'; return; }
         const hash = await hashPassword(login, pass);
         if (hash !== users[login].hash) { err.textContent = 'Неверный пароль'; return; }
-        setSession(login);
+        setSession(login, box.querySelector('#authRemember').checked);
       }
       box.remove();
       toast('Вы вошли как ' + login);
@@ -1095,6 +1106,13 @@
   function guardAuth() {
     const session = currentSession();
     if (session) { AUTH.login = session.login; return; }
+    let remembered = '';
+    try { remembered = localStorage.getItem('volna.remember') || ''; } catch (e) { remembered = ''; }
+    if (remembered && usersMap()[remembered]) {
+      setSession(remembered, true);
+      toast('Вы вошли автоматически как ' + remembered);
+      return;
+    }
     showAuthScreen();
   }
 
@@ -1102,6 +1120,13 @@
 
   function isServerMachine() {
     return /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname);
+  }
+
+  function prefillJoinName() {
+    const input = $('#nameInput');
+    if (!input) return;
+    if ((input.value || '').trim()) return;
+    if (AUTH.login) input.value = AUTH.login;
   }
 
   function setHostName() {
@@ -2597,6 +2622,7 @@
     watchJoinScreen();
     initSessionLock();
     guardAuth();
+    prefillJoinName();
     bindAccountRow();
     bindFriendsPanel();
     attachAllPasswordToggles();

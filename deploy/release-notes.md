@@ -1,9 +1,17 @@
-# Volna 1.7.1 — show password buttons
+# Volna 1.7.2 — remember me, real names
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.7.2
+
+- **Remember me.** The sign-in card has a checkbox: when it is on, the login is remembered and
+  the next launch signs the user in automatically; the session lasts a year instead of a day.
+  Turning the checkbox off keeps the session until the tab is closed and forgets the login.
+- **No random guest names.** The join form no longer generates “Guest-1234” — the name is taken
+  from the signed-in account, so people appear under their own login.
 
 ## What's new in 1.7.1
 
@@ -214,8 +222,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-75fdd56bca4ee65502916cccc9e47bfad7fb951e26f0041ab5c1797278e6a926  volna-voice-app.zip
-31b7e18709f52c717c99619f31d8104bab8cba3ce4b78a9563cd9f94f45ca04e  volna-voice-app-linux.tar.gz
+44a1597e8d9100b6552a732b8bd2446b1a0b589f4410c501a3277b6016d6ada4  volna-voice-app.zip
+0dcfc3cd6ecef932c80091ebb448217e5d454ad2d09c88c3a858660f5e1fad47  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)
