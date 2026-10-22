@@ -1124,9 +1124,17 @@
 
   function prefillJoinName() {
     const input = $('#nameInput');
-    if (!input) return;
-    if ((input.value || '').trim()) return;
-    if (AUTH.login) input.value = AUTH.login;
+    if (!input || !AUTH.login) return;
+    const apply = () => {
+      if (!input.value || /^Гость-\d+$/i.test(input.value)) input.value = AUTH.login;
+    };
+    apply();
+    // app.js ставит «Гость-N» при своей инициализации — перебиваем первые секунды
+    let ticks = 0;
+    const timer = setInterval(() => {
+      apply();
+      if (++ticks > 20) clearInterval(timer);
+    }, 400);
   }
 
   function setHostName() {
@@ -1932,11 +1940,12 @@
   }
 
   function bindFriendsPanel() {
-    const box = document.querySelector('.chan-scroll');
+    const box = document.querySelector('.side') || document.querySelector('.chan-scroll');
     if (!box || $('#friendsBox')) return;
     const wrap = document.createElement('div');
     wrap.id = 'friendsBox';
     wrap.innerHTML = '<div class="side-head"><h2>Друзья</h2><button class="icon-btn" id="friendAddBtn" type="button" title="Добавить друга">+</button></div><div id="friendsList" class="friends-list"></div>';
+    wrap.classList.add('side-block');
     box.append(wrap);
     wrap.querySelector('#friendAddBtn').addEventListener('click', () => {
       const name = window.prompt('Имя друга (как он входит в комнату):', '');

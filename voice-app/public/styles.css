@@ -174,7 +174,7 @@ button,input,select{font:inherit;color:inherit}
 }
 /* демонстрация занимает свободное место над чатом, а не 100% высоты */
 .stage>.stage-wrap{flex:1 1 auto;height:auto;min-height:0}
-.side{display:none !important}
+.side{display:none}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-content:start}
 .tile{
   display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 12px;
@@ -460,3 +460,15 @@ button,input,select{font:inherit;color:inherit}
 .auth-remember input:checked{background:var(--accent);border-color:var(--accent)}
 .auth-remember input:checked::after{content:'';position:absolute;left:5px;top:2px;width:4px;height:8px;border:solid #0b120b;border-width:0 2px 2px 0;transform:rotate(45deg)}
 .auth-remember:hover span{color:var(--text)}
+
+/* right column: friends */
+.room{grid-template-columns:250px minmax(0,1fr) 250px;grid-template-areas:"top top top" "chan stage side" "ctl ctl ctl"}
+.side{grid-area:side;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden}
+.side:empty{display:none !important}
+.side-block{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+#friendsBox{flex:1 1 auto;min-height:0}
+#friendsBox .friends-list{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 6px 8px}
+@media (max-width:1050px){
+  .room{grid-template-columns:230px minmax(0,1fr);grid-template-areas:"top top" "chan stage" "ctl ctl"}
+  .side{display:none !important}
+}

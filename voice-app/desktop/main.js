@@ -386,6 +386,9 @@ if (!gotLock) {
 
     createWindow(SPLASH);             // окно открывается сразу с заставкой
 
+    try { await session.defaultSession.clearCache(); } catch (e) { /* кэш уже пуст */ }
+    try { await session.defaultSession.clearStorageData({ storages: ['serviceworkers'] }); } catch (e) {}
+
     if (REMOTE) {
       // Домен: свой сервер не поднимаем, сразу грузим комнату на внешнем сервере
       buildMenu();

@@ -1,9 +1,18 @@
-# Volna 1.7.2 — remember me, real names
+# Volna 1.7.3 — friends on the right, no guest names
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.7.3
+
+- **Friends moved to the right column.** The friends list now lives in its own panel on the
+  right, next to the stage; the left column keeps rooms, participants and the account row.
+- **No more “Guest-1234”.** The join form takes the name from the signed-in account, even when
+  the bundled legacy script tries to insert a random guest name on startup.
+- **Fresh UI after an update.** The desktop window clears its HTTP cache before loading, so a new
+  build shows up right away instead of an old cached page.
 
 ## What's new in 1.7.2
 
@@ -222,8 +231,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-44a1597e8d9100b6552a732b8bd2446b1a0b589f4410c501a3277b6016d6ada4  volna-voice-app.zip
-0dcfc3cd6ecef932c80091ebb448217e5d454ad2d09c88c3a858660f5e1fad47  volna-voice-app-linux.tar.gz
+4b7db1566cd05e908a667cba08be0dabb12641b4a0e3d60ea9bf5da395f89343  volna-voice-app.zip
+52154cc81b71033ad2c7a8f9a6ced2d0ed098887fd14fe10ed93f327f8e95bdd  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)
