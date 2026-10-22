@@ -1,9 +1,20 @@
-# Volna 1.6.2 — desktop app polish for domain mode
+# Volna 1.7.0 — app sign-in, friends panel, no auto-join
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.7.0
+
+- **Sign-in screen with login and password.** A profile is created on the device (login,
+  password hashed with PBKDF2-SHA-256, 120k iterations), a session lasts 30 days and can be
+  closed from the left column. Note: accounts are local to the browser, not server-side, because
+  the room itself is protected by the shared room password.
+- **No automatic entry.** Invite links and the last room only prefill the form; joining requires
+  an explicit “Войти в комнату”. The auto-join countdown is gone.
+- **Friends panel** under the participants: add by name, online dot reflects the current room,
+  one click to visit a friend's room, ✕ to remove.
 
 ## What's new in 1.6.2
 
@@ -197,8 +208,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-bc1e8681f63f27f902ff752f44da9d5449923caebcf814a6aeb8dbd383b4f669  volna-voice-app.zip
-3e11196e603f78fe3da93983641f863c4419a370b295f0b6ceb2dfdecb4a2b0d  volna-voice-app-linux.tar.gz
+98df6141e9b558a5e2f3da4c9ff2fcc6a1d0ac4df0fb349083b969e082771f45  volna-voice-app.zip
+ba1dc375b479b814cf104bf750466b07fde83a93956037db4d28171fb5a4fc79  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)

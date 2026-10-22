@@ -659,7 +659,8 @@
         const inv = { room: String(m.room), key: String(m.key || '') };
         if (!applyInvite(inv)) return;
         toast('Приглашение в комнату «' + inv.room + '»');
-        if (store.get('auto', '1') !== '0') startCountdown(3, 'Вас приглашают в комнату «' + inv.room + '»');
+        // автовход отключён: приглашение только заполняет поля
+        toast('Приглашение получено — проверьте имя и нажмите «Войти в комнату»');
       };
     } catch (e) { IB.bc = null; }
   }
@@ -942,6 +943,122 @@
         toast('Не удалось открыть стрим в окне: ' + ((err && err.message) || err), 'error');
       }
     });
+  }
+
+  /* ---- 4a. Вход по логину и паролю (локальные профили) ---- */
+
+  const AUTH = { login: '' };
+
+  function usersMap() {
+    try { return JSON.parse(store.get('accounts', '{}')) || {}; } catch (e) { return {}; }
+  }
+
+  function saveUsers(map) { store.set('accounts', JSON.stringify(map)); }
+
+  function currentSession() {
+    try {
+      const data = JSON.parse(store.get('session', 'null'));
+      if (data && data.login && Number(data.until) > Date.now()) return data;
+    } catch (e) { /* нет сессии */ }
+    return null;
+  }
+
+  function setSession(login) {
+    store.set('session', JSON.stringify({ login: login, until: Date.now() + 30 * 86400000 }));
+    AUTH.login = login;
+  }
+
+  function dropSession() {
+    store.set('session', '');
+    AUTH.login = '';
+  }
+
+  async function hashPassword(login, pass) {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt: enc.encode('volna:' + String(login).toLowerCase()), iterations: 120000, hash: 'SHA-256' },
+      key,
+      256
+    );
+    return Array.from(new Uint8Array(bits)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /** Экран входа в приложение: без него дальше не пускает. */
+  function showAuthScreen() {
+    const box = document.createElement('div');
+    box.id = 'authScreen';
+    box.className = 'auth-screen';
+    box.innerHTML = [
+      '<form class="auth-card" id="authForm">',
+      '  <div class="brand"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.6" y="9" width="2.6" height="6" rx="1.3"/><rect x="7.4" y="5.6" width="2.6" height="12.8" rx="1.3"/><rect x="12.2" y="3" width="2.6" height="18" rx="1.3"/><rect x="17" y="7.6" width="2.6" height="8.8" rx="1.3"/></svg>',
+      '    <div class="brand-text"><h1>Волна</h1><p class="muted small">вход в приложение</p></div></div>',
+      '  <div class="auth-tabs"><button type="button" data-mode="in" class="on">Вход</button><button type="button" data-mode="up">Регистрация</button></div>',
+      '  <label class="field"><span>Логин</span><input id="authLogin" autocomplete="username" maxlength="24"></label>',
+      '  <label class="field"><span>Пароль</span><input id="authPass" type="password" autocomplete="current-password" maxlength="64"></label>',
+      '  <label class="field hidden" id="authPass2Field"><span>Повторите пароль</span><input id="authPass2" type="password" maxlength="64"></label>',
+      '  <p class="auth-error" id="authError"></p>',
+      '  <button class="btn primary" type="submit" id="authSubmit">Войти</button>',
+      '</form>',
+    ].join('');
+    document.body.append(box);
+
+    let mode = 'in';
+    const err = box.querySelector('#authError');
+    const submit = box.querySelector('#authSubmit');
+    const pass2Field = box.querySelector('#authPass2Field');
+
+    box.querySelectorAll('[data-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        mode = btn.getAttribute('data-mode');
+        box.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('on', b === btn));
+        pass2Field.classList.toggle('hidden', mode !== 'up');
+        submit.textContent = mode === 'up' ? 'Создать аккаунт' : 'Войти';
+        err.textContent = '';
+      });
+    });
+
+    box.querySelector('#authForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      err.textContent = '';
+      const login = String(box.querySelector('#authLogin').value || '').trim().toLowerCase();
+      const pass = String(box.querySelector('#authPass').value || '');
+      const pass2 = String(box.querySelector('#authPass2').value || '');
+      if (!/^[a-z0-9._-]{3,24}$/.test(login)) {
+        err.textContent = 'Логин: 3–24 символа, латиница, цифры, точка, дефис';
+        return;
+      }
+      if (pass.length < 6) {
+        err.textContent = 'Пароль не короче 6 символов';
+        return;
+      }
+      const users = usersMap();
+      if (mode === 'up') {
+        if (users[login]) { err.textContent = 'Такой логин уже занят'; return; }
+        if (pass !== pass2) { err.textContent = 'Пароли не совпадают'; return; }
+        users[login] = { hash: await hashPassword(login, pass), created: Date.now() };
+        saveUsers(users);
+        setSession(login);
+      } else {
+        if (!users[login]) { err.textContent = 'Пользователь не найден'; return; }
+        const hash = await hashPassword(login, pass);
+        if (hash !== users[login].hash) { err.textContent = 'Неверный пароль'; return; }
+        setSession(login);
+      }
+      box.remove();
+      toast('Вы вошли как ' + login);
+    });
+
+    setTimeout(() => {
+      const input = box.querySelector('#authLogin');
+      if (input) input.focus();
+    }, 100);
+  }
+
+  function guardAuth() {
+    const session = currentSession();
+    if (session) { AUTH.login = session.login; return; }
+    showAuthScreen();
   }
 
   /* ---- 6.1. Имя хоста: на машине с сервером по умолчанию «Admin» ---- */
@@ -1723,6 +1840,84 @@
     });
   }
 
+  /* ---- 6.4a. Аккаунт и друзья в левой колонке ---- */
+
+  function bindAccountRow() {
+    const box = document.querySelector('.chan-scroll');
+    if (!box || $('#logoutBtn')) return;
+    const row = document.createElement('div');
+    row.className = 'chan-user';
+    row.innerHTML = '<span id="chanUser" class="muted small"></span><button id="logoutBtn" class="icon-btn" type="button" title="Выйти из аккаунта">⎋</button>';
+    box.append(row);
+    const name = row.querySelector('#chanUser');
+    if (name) name.textContent = AUTH.login || '—';
+    row.querySelector('#logoutBtn').addEventListener('click', () => {
+      dropSession();
+      location.reload();
+    });
+  }
+
+  function isOnline(name) {
+    if (!active) return false;
+    const needle = String(name || '').toLowerCase();
+    let found = false;
+    try {
+      active.remoteParticipants.forEach((p) => {
+        if (String(p.name || '').toLowerCase() === needle) found = true;
+      });
+    } catch (e) { /* нет комнаты */ }
+    return found;
+  }
+
+  function bindFriendsPanel() {
+    const box = document.querySelector('.chan-scroll');
+    if (!box || $('#friendsBox')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'friendsBox';
+    wrap.innerHTML = '<div class="side-head"><h2>Друзья</h2><button class="icon-btn" id="friendAddBtn" type="button" title="Добавить друга">+</button></div><div id="friendsList" class="friends-list"></div>';
+    box.append(wrap);
+    wrap.querySelector('#friendAddBtn').addEventListener('click', () => {
+      const name = window.prompt('Имя друга (как он входит в комнату):', '');
+      if (name) addFriend(name, currentRoom());
+    });
+  }
+
+  function renderFriendsPanel() {
+    const list = $('#friendsList');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!FRIENDS.list.length) {
+      const empty = document.createElement('p');
+      empty.className = 'muted tiny';
+      empty.textContent = 'Пока никого — добавьте по имени из комнаты';
+      list.append(empty);
+      return;
+    }
+    FRIENDS.list.forEach((friend) => {
+      const row = document.createElement('div');
+      row.className = 'friend-row' + (isOnline(friend.name) ? ' online' : '');
+      const dot = document.createElement('i');
+      dot.className = 'friend-dot';
+      const name = document.createElement('span');
+      name.className = 'friend-name';
+      name.textContent = friend.name;
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'chan-edit';
+      go.title = 'Зайти в комнату друга';
+      go.textContent = '→';
+      go.addEventListener('click', (e) => { e.stopPropagation(); switchToRoom(friend.room || 'main'); });
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'chan-del';
+      del.title = 'Убрать из друзей';
+      del.textContent = '✕';
+      del.addEventListener('click', (e) => { e.stopPropagation(); removeFriend(friend.name); renderFriendsPanel(); });
+      row.append(dot, name, go, del);
+      list.append(row);
+    });
+  }
+
   /* ---- 6.5. Главное меню ---- */
 
   function closeMenu() {
@@ -2364,6 +2559,10 @@
     } catch (e) { /* не критично */ }
     watchJoinScreen();
     initSessionLock();
+    guardAuth();
+    bindAccountRow();
+    bindFriendsPanel();
+    renderFriendsPanel();
     guardMultiJoin();
     muteSwitchErrors();
     guardDoubleJoin();
@@ -2398,7 +2597,7 @@
       cleanHash();                 // ключ комнаты не остаётся в адресной строке
       announceInvite(inv);
       setHostName();
-      startCountdown(3);
+      toast('Данные комнаты подставлены — нажмите «Войти в комнату»');
       return;
     }
 
@@ -2417,7 +2616,7 @@
       const saved = readCode(store.get('invite', ''));
       const urlRoom = (new URLSearchParams(location.search).get('room') || '').trim();
       if (saved && (!urlRoom || urlRoom === saved.room) && applyInvite(saved)) {
-        startCountdown(2, 'Подключаемся к комнате «' + saved.room + '»');
+        toast('Последняя комната подставлена — нажмите «Войти в комнату»');
       }
     }
   }

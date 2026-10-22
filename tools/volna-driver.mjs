@@ -235,6 +235,10 @@ async function main() {
     const name = process.env.VOLNA_NAME || 'Тест';
 
     const open = async (query = '') => {
+      // тестовая сессия: приложение требует вход по логину и паролю
+      await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
+        source: "try { localStorage.setItem('volna.session', JSON.stringify({ login: 'test', until: Date.now() + 2592000000 })); } catch (e) {}",
+      });
       await cdp.send('Page.navigate', { url: BASE + '/?room=' + encodeURIComponent(room) + query });
       await sleep(1200);
       await cdp.eval(SNAPSHOT, false);
@@ -1086,6 +1090,26 @@ async function main() {
       report.ok = true;
     }
 
+    if (scenario === 'shotauth') {
+      await cdp.send('Page.navigate', { url: BASE + '/' });
+      await sleep(2500);
+      if (process.env.VOLNA_SHOT_W) {
+        await cdp.send('Emulation.setDeviceMetricsOverride', {
+          width: Number(process.env.VOLNA_SHOT_W || 1280),
+          height: Number(process.env.VOLNA_SHOT_H || 800),
+          deviceScaleFactor: 1,
+          mobile: false,
+        });
+        await sleep(800);
+      }
+      const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
+      const file = join(process.cwd(), 'shot-auth-' + Date.now() + '.png');
+      writeFileSync(file, Buffer.from(shot.data, 'base64'));
+      const state = await cdp.eval("(() => ({ auth: !!document.querySelector('#authScreen') }))()", false);
+      step('экран входа', { file, auth: state.auth });
+      report.ok = !!state.auth;
+    }
+
     if (scenario === 'shot') {
       // Снимок интерфейса — чтобы проверять вёрстку (чат внизу списка участников)
       await open();
@@ -1379,6 +1403,34 @@ async function main() {
       step('после перехода (оставшийся)', afterA);
       report.ok = afterB.inRoom && afterB.people >= 1 && afterB.tiles >= 1 && afterA.inRoom && afterA.people >= 1;
       cdpB.close();
+    }
+
+    if (scenario === 'authtest') {
+      // без сохранённой сессии должен быть экран входа, регистрация — пускать внутрь
+      await cdp.send('Page.navigate', { url: BASE + '/' });
+      await sleep(2500);
+      const before = await cdp.eval(`(() => ({
+        auth: !!document.querySelector('#authScreen'),
+        join: !(document.querySelector('#joinScreen') || {}).classList.contains('hidden'),
+      }))()`, false);
+      await cdp.eval(`(() => {
+        const box = document.querySelector('#authScreen');
+        if (!box) return false;
+        box.querySelector('[data-mode="up"]').click();
+        box.querySelector('#authLogin').value = 'andrey';
+        box.querySelector('#authPass').value = 'volna-test-1';
+        box.querySelector('#authPass2').value = 'volna-test-1';
+        box.querySelector('#authForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        return true;
+      })()`, false);
+      await sleep(2000);
+      const after = await cdp.eval(`(() => ({
+        auth: !!document.querySelector('#authScreen'),
+        session: localStorage.getItem('volna.session') || '',
+      }))()`, false);
+      step('до регистрации', before);
+      step('после регистрации', { auth: after.auth, hasSession: /andrey/.test(after.session) });
+      report.ok = before.auth === true && after.auth === false && /andrey/.test(after.session);
     }
 
     if (scenario === 'badpass') {

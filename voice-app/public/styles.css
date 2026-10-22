@@ -427,3 +427,21 @@ button,input,select{font:inherit;color:inherit}
 .ping.ok b{color:var(--amber)}
 .ping.bad i{background:var(--red);box-shadow:0 0 8px rgba(255,90,77,.5)}
 .ping.bad b{color:var(--red)}
+
+/* экран входа в приложение */
+.auth-screen{position:fixed;inset:0;z-index:20000;display:grid;place-items:center;padding:24px;background:rgba(4,6,4,.92);backdrop-filter:blur(6px)}
+.auth-card{width:min(420px,100%);display:grid;gap:14px;padding:26px;border:1px solid var(--line);border-radius:20px;background:rgba(12,16,10,.92);box-shadow:var(--shadow)}
+.auth-tabs{display:flex;gap:6px}
+.auth-tabs button{flex:1;padding:8px 10px;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:10px;cursor:pointer;font:13px var(--font-ui)}
+.auth-tabs button.on{background:var(--panel2);color:var(--text);border-color:var(--line2)}
+.auth-error{min-height:16px;margin:0;font-size:12.5px;color:var(--red)}
+/* аккаунт и друзья в левой колонке */
+.chan-user{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.friends-list{display:flex;flex-direction:column;gap:2px}
+.friend-row{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;font-size:12.5px;color:var(--muted)}
+.friend-row:hover{background:var(--panel2);color:var(--text)}
+.friend-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.18);flex:none}
+.friend-row.online .friend-dot{background:var(--accent);box-shadow:0 0 8px rgba(142,255,3,.6)}
+.friend-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.friend-row .chan-edit,.friend-row .chan-del{opacity:.5}
+.friend-row:hover .chan-edit,.friend-row:hover .chan-del{opacity:1}
