@@ -22,6 +22,7 @@ EXCLUDE_FILES = {
     "livekit-server.exe",
     "livekit.zip",
     "udp-mapping.txt",
+    "remote.json",
 }
 EXCLUDE_EXT = (".log", ".pid", ".pyc", ".zip")
 

@@ -26,6 +26,21 @@ const ROOT = path.dirname(DESKTOP_DIR);           // папка приложен
 const CFG_PATH = path.join(ROOT, 'config.json');
 const ICON = path.join(ROOT, 'public', 'icon.ico');
 const ROOM = process.env.VOLNA_ROOM || 'main';
+// Работа через внешний сервер: файл remote.json рядом с этим приложением.
+// { "url": "https://volna.is-cool.dev", "hash": "<код приглашения>" }
+const REMOTE_PATH = path.join(DESKTOP_DIR, 'remote.json');
+const REMOTE_ROAMING = process.env.APPDATA || path.join(require('os').homedir(), 'AppData', 'Roaming');
+const REMOTE_USER_PATH = path.join(REMOTE_ROAMING, 'Volna', 'remote.json');
+const REMOTE = (function () {
+  // сначала личный файл в %APPDATA%\Volna (в репозиторий не попадает), затем рядом с приложением
+  for (const file of [REMOTE_USER_PATH, REMOTE_PATH]) {
+    try {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (data && data.url) return data;
+    } catch (e) { /* пробуем следующий */ }
+  }
+  return null;
+})();
 
 let mainWindow = null;
 let serverStartedByUs = false;
@@ -209,6 +224,12 @@ function stopServer() {
 /* ─────────── окно ─────────── */
 
 function appUrl(autoJoin) {
+  // Внешний сервер (домен): локальный сервер не нужен вовсе
+  if (REMOTE) {
+    const base = String(REMOTE.url).replace(/\/$/, '') + '/';
+    if (!autoJoin) return base;
+    return REMOTE.hash ? base + '#i=' + REMOTE.hash : base;
+  }
   const cfg = readConfig() || {};
   const base = 'https://localhost:' + appPort + '/';
   if (!autoJoin) return base;
@@ -362,6 +383,13 @@ if (!gotLock) {
     try { app.commandLine.appendSwitch('lang', langSwitch[0]); } catch (e) { /* не критично */ }
 
     createWindow(SPLASH);             // окно открывается сразу с заставкой
+
+    if (REMOTE) {
+      // Домен: свой сервер не поднимаем, сразу грузим комнату на внешнем сервере
+      buildMenu();
+      if (mainWindow) mainWindow.loadURL(appUrl(true));
+      return;
+    }
 
     const ready = await ensureServer();
     if (!ready) {

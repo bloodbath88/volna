@@ -28,3 +28,4 @@ build/
 Thumbs.db
 desktop.ini
 .DS_Store
+voice-app/desktop/remote.json

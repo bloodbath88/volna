@@ -1,9 +1,18 @@
-# Volna 1.6.0 — steadier audio, faster room switch, stream in its own window
+# Volna 1.6.1 — desktop app works on the domain
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.6.1
+
+- **Desktop app can run against the domain.** If `remote.json` exists (in `%APPDATA%\Volna\`
+  or next to the app), Electron loads that URL with the invite code, skips starting a local
+  server entirely and joins the room on the remote host.
+- Tested: the window opens `https://volna.is-cool.dev`, the room is joined, the participant tile
+  is rendered, ping shows 63 ms, and no local Node or LiveKit processes are spawned.
+- The file is personal (it contains the room code) and is not part of the repository.
 
 ## What's new in 1.6.0
 
@@ -180,8 +189,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-42706758498126c99657bd89c2a6bb13b13e22af7686d0ba7002b26842746ef2  volna-voice-app.zip
-768eed89577c579cd120b56e4a60c559c0ae682c0ddcee136b14e5a42bdca8fc  volna-voice-app-linux.tar.gz
+2c8958710b7148fcd9e1697c05fd8305bb2242972f3739ebf5d7395d80525754  volna-voice-app.zip
+84037059b0d8a56e220fc0e5af2fb2bf7cab747bddda738150b1c1eabfc1e066  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)
