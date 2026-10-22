@@ -1105,7 +1105,7 @@ async function main() {
       const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
       const file = join(process.cwd(), 'shot-auth-' + Date.now() + '.png');
       writeFileSync(file, Buffer.from(shot.data, 'base64'));
-      const state = await cdp.eval("(() => ({ auth: !!document.querySelector('#authScreen') }))()", false);
+      const state = await cdp.eval("(() => ({ auth: !!document.querySelector('#authScreen'), eyes: document.querySelectorAll('.pass-eye').length, passTypes: Array.from(document.querySelectorAll('input')).map((i) => i.type).join(',') }))()", false);
       step('экран входа', { file, auth: state.auth });
       report.ok = !!state.auth;
     }
@@ -1428,9 +1428,23 @@ async function main() {
         auth: !!document.querySelector('#authScreen'),
         session: localStorage.getItem('volna.session') || '',
       }))()`, false);
+      const eye = await cdp.eval(`(() => {
+        const box = document.querySelector('#authScreen');
+        if (!box) return null;
+        const input = box.querySelector('#authPass');
+        const wrap = input.parentElement;
+        const btn = wrap.querySelector('.pass-eye');
+        if (!btn) return null;
+        const first = input.type;
+        btn.click();
+        const shown = input.type;
+        btn.click();
+        return { first, shown, back: input.type, cls: wrap.className, btn: btn.className };
+      })()`, false);
+      step('показ пароля', eye);
       step('до регистрации', before);
       step('после регистрации', { auth: after.auth, hasSession: /andrey/.test(after.session) });
-      report.ok = before.auth === true && after.auth === false && /andrey/.test(after.session);
+      report.ok = !!eye && eye.first === 'password' && eye.shown === 'text' && eye.back === 'password' && before.auth === true && after.auth === false && /andrey/.test(after.session);
     }
 
     if (scenario === 'badpass') {

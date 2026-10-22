@@ -445,3 +445,11 @@ button,input,select{font:inherit;color:inherit}
 .friend-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .friend-row .chan-edit,.friend-row .chan-del{opacity:.5}
 .friend-row:hover .chan-edit,.friend-row:hover .chan-del{opacity:1}
+
+/* показать/скрыть пароль */
+.pass-wrap{position:relative;display:block}
+.pass-wrap input{width:100%;padding-right:40px}
+.pass-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:28px;height:28px;display:grid;place-items:center;border:0;background:transparent;color:var(--muted);cursor:pointer;border-radius:8px;transition:color .12s,background .12s}
+.pass-eye:hover{color:var(--text);background:var(--panel2)}
+.pass-eye.on{color:var(--accent)}
+.pass-eye svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}

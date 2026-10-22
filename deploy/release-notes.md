@@ -1,9 +1,15 @@
-# Volna 1.7.0 — app sign-in, friends panel, no auto-join
+# Volna 1.7.1 — show password buttons
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.7.1
+
+- **Show password.** Every password field (sign-in, repeat password, room password) has an eye
+  button: one click reveals the text, another hides it, the icon switches between open and
+  crossed out. Works on the sign-in screen and in the join form.
 
 ## What's new in 1.7.0
 
@@ -208,8 +214,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-98df6141e9b558a5e2f3da4c9ff2fcc6a1d0ac4df0fb349083b969e082771f45  volna-voice-app.zip
-ba1dc375b479b814cf104bf750466b07fde83a93956037db4d28171fb5a4fc79  volna-voice-app-linux.tar.gz
+75fdd56bca4ee65502916cccc9e47bfad7fb951e26f0041ab5c1797278e6a926  volna-voice-app.zip
+31b7e18709f52c717c99619f31d8104bab8cba3ce4b78a9563cd9f94f45ca04e  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)

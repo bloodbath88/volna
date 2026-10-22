@@ -947,6 +947,42 @@
 
   /* ---- 4a. Вход по логину и паролю (локальные профили) ---- */
 
+  const EYE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.6"/></svg>';
+  const EYE_OFF_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg>';
+
+  /** Кнопка «показать пароль» рядом с любым полем пароля. */
+  function attachPasswordToggle(input) {
+    if (!input || input.dataset.eye === '1') return;
+    input.dataset.eye = '1';
+    const wrap = document.createElement('span');
+    wrap.className = 'pass-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.append(input);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pass-eye';
+    btn.title = 'Показать пароль';
+    btn.setAttribute('aria-label', 'Показать пароль');
+    btn.innerHTML = EYE_SVG;
+    wrap.append(btn);
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.innerHTML = show ? EYE_OFF_SVG : EYE_SVG;
+      btn.classList.toggle('on', show);
+      btn.title = show ? 'Скрыть пароль' : 'Показать пароль';
+      input.focus();
+    });
+  }
+
+  function attachAllPasswordToggles() {
+    document.querySelectorAll('input[type="password"]').forEach((input) => attachPasswordToggle(input));
+  }
+
+
   const AUTH = { login: '' };
 
   function usersMap() {
@@ -1002,6 +1038,7 @@
       '</form>',
     ].join('');
     document.body.append(box);
+    attachAllPasswordToggles();
 
     let mode = 'in';
     const err = box.querySelector('#authError');
@@ -2562,6 +2599,7 @@
     guardAuth();
     bindAccountRow();
     bindFriendsPanel();
+    attachAllPasswordToggles();
     renderFriendsPanel();
     guardMultiJoin();
     muteSwitchErrors();
