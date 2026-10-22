@@ -1,9 +1,20 @@
-# Volna 1.5.3 — cache-busted assets, participant render fix
+# Volna 1.6.0 — steadier audio, faster room switch, stream in its own window
 
 Self-hosted voice rooms with screen sharing. This release is about the look and feel:
 a new visual language, a Discord-style channel list, and a chat that lives inside the room.
 
 - **Invite links also work as ?i=** in the query string, so messengers that drop the part after # no longer break the auto-join.
+
+## What's new in 1.6.0
+
+- **Audio stays level during screen sharing.** Screen-share bitrate was cut (1440p 12 → 6 Mbit/s,
+  1080p 6 → 4.5, layers 1.2/2.8/4.5), DTX is off, RED is on and voice is published at 64 kbit/s,
+  so a heavy stream no longer squeezes the voice channel.
+- **Room switch feels instant.** The “switching room” overlay appears only if the transition takes
+  longer than 250 ms, so a quick switch shows nothing at all.
+- **Stream in its own window.** A “В окне” button on the stage bar pops the shared screen into
+  Picture-in-Picture; where PiP is unavailable a separate browser window is opened with the same
+  stream. Works both for the broadcaster and for viewers.
 
 ## What's new in 1.5.3
 
@@ -169,8 +180,8 @@ a new visual language, a Discord-style channel list, and a chat that lives insid
 SHA-256:
 
 ```
-b628a88e12c5b3b243742319a309f9c58596dca34845cb29092f256c82b4468b  volna-voice-app.zip
-1edbd6a2521ec994223e6f862338430b746edfab492922ac8164d5e30d32f792  volna-voice-app-linux.tar.gz
+42706758498126c99657bd89c2a6bb13b13e22af7686d0ba7002b26842746ef2  volna-voice-app.zip
+768eed89577c579cd120b56e4a60c559c0ae682c0ddcee136b14e5a42bdca8fc  volna-voice-app-linux.tar.gz
 ```
 
 ## Quick start (Windows)

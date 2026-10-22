@@ -210,9 +210,9 @@
         screenShareEncoding: { maxBitrate: profile.bitrate, maxFramerate: profile.res.frameRate },
         // Слои симулкаста: зритель сам выберет 720p/1080p/1440p в зависимости от экрана и канала
         screenShareSimulcastLayers: [
-          { width: 1280, height: 720, encoding: { maxBitrate: 1500000, maxFramerate: 30 } },
-          { width: 1920, height: 1080, encoding: { maxBitrate: 3500000, maxFramerate: 60 } },
-          { width: 2560, height: 1440, encoding: { maxBitrate: 6000000, maxFramerate: 60 } },
+          { width: 1280, height: 720, encoding: { maxBitrate: 1200000, maxFramerate: 30 } },
+          { width: 1920, height: 1080, encoding: { maxBitrate: 2800000, maxFramerate: 60 } },
+          { width: 2560, height: 1440, encoding: { maxBitrate: 4500000, maxFramerate: 60 } },
         ],
         degradationPreference: profile.degrade || 'maintain-resolution',
       });
@@ -247,7 +247,12 @@
         // Не останавливаем дорожку микрофона при выключении: иначе Bluetooth-гарнитура
         // переключается в режим «телефона» (тихо, узкая полоса), а AGC каждый раз
         // начинает с нуля — из-за этого звук «сам становится тише».
-        const opts = Object.assign({ stopMicTrackOnMute: false }, options || {});
+        const opts = Object.assign({
+          stopMicTrackOnMute: false,
+          // Звук не режем в тишине и дублируем пакеты (RED): голос остаётся ровным,
+          // даже когда канал занят демонстрацией экрана.
+          publishDefaults: { dtx: false, red: true, audioPreset: { maxBitrate: 64000, stereo: false } },
+        }, options || {});
         super(opts);
         this.__volnaClosed = false;
         latest = this;
@@ -902,6 +907,43 @@
     paintPing(0);
   }
 
+  /* ---- 6.1c. Стрим в отдельном окне ---- */
+
+  function bindPip() {
+    const btn = $('#stagePipBtn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const video = $('#stageVideo');
+      if (!video) return;
+      try {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+          return;
+        }
+        if (video.requestPictureInPicture) {
+          await video.requestPictureInPicture();
+          toast('Стрим открыт в отдельном окне — его можно двигать и масштабировать');
+          return;
+        }
+        // запасной вариант: своё окно с тем же потоком
+        const win = window.open('', 'volna-stage', 'width=960,height=560');
+        if (!win) { toast('Браузер заблокировал окно — разрешите всплывающие окна', 'error'); return; }
+        win.document.title = 'Волна — демонстрация';
+        win.document.body.style.margin = '0';
+        win.document.body.style.background = '#000';
+        const v = win.document.createElement('video');
+        v.autoplay = true;
+        v.muted = true;
+        v.playsInline = true;
+        v.style.cssText = 'width:100vw;height:100vh;object-fit:contain;background:#000';
+        win.document.body.append(v);
+        if (video.srcObject) v.srcObject = video.srcObject;
+      } catch (err) {
+        toast('Не удалось открыть стрим в окне: ' + ((err && err.message) || err), 'error');
+      }
+    });
+  }
+
   /* ---- 6.1. Имя хоста: на машине с сервером по умолчанию «Admin» ---- */
 
   function isServerMachine() {
@@ -1138,7 +1180,8 @@
     if (inRoom()) {
       ROOMS.pending = target;
       SWITCH.active = true;
-      switchOverlay(true);
+      // плашку показываем только если переход действительно затянулся
+      setTimeout(() => { if (SWITCH.active) switchOverlay(true); }, 250);
       const leaveBtn = $('#leaveBtn');
       if (leaveBtn) leaveBtn.click();
     } else {
@@ -1320,13 +1363,13 @@
     text: {
       label: 'Документы и слайды · чётко',
       res: { width: 2560, height: 1440, frameRate: 20 },
-      bitrate: 6000000,
+      bitrate: 4500000,
       hint: 'detail',
       degrade: 'maintain-resolution',
     },
-    fhd60: { label: '1080p · 60 кадров · плавно', res: { width: 1920, height: 1080, frameRate: 60 }, bitrate: 6000000, hint: 'motion', degrade: 'maintain-framerate' },
-    hd60: { label: '720p · 60 кадров · экономия', res: { width: 1280, height: 720, frameRate: 60 }, bitrate: 2500000, hint: 'motion', degrade: 'maintain-framerate' },
-    qhd60: { label: '1440p · 60 кадров · максимум', res: { width: 2560, height: 1440, frameRate: 60 }, bitrate: 12000000, hint: 'motion', degrade: 'maintain-framerate' },
+    fhd60: { label: '1080p · 60 кадров · плавно', res: { width: 1920, height: 1080, frameRate: 60 }, bitrate: 4500000, hint: 'motion', degrade: 'maintain-framerate' },
+    hd60: { label: '720p · 60 кадров · экономия', res: { width: 1280, height: 720, frameRate: 60 }, bitrate: 2000000, hint: 'motion', degrade: 'maintain-framerate' },
+    qhd60: { label: '1440p · 60 кадров · максимум', res: { width: 2560, height: 1440, frameRate: 60 }, bitrate: 6000000, hint: 'motion', degrade: 'maintain-framerate' },
   };
 
   function gameProfile() {
@@ -1662,7 +1705,6 @@
   }
 
   function bindZoom() {
-    // Картинки в чате — во весь экран; демонстрация экрана — двойной клик на полноэкранный режим
     document.addEventListener('dblclick', (e) => {
       const img = e.target && e.target.closest ? e.target.closest('.chat-img') : null;
       if (img && img.src) {
@@ -2331,6 +2373,7 @@
     bindChatFiles();
     bindSubroomActions();
     bindZoom();
+    bindPip();
     watchRoomMeta();
     // Чат виден сразу: он часть комнаты, а не спрятанная за кнопкой панель
     if (store.get('chat', '1') !== '0') chatShow(true);
