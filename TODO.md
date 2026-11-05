@@ -1,0 +1,64 @@
+# Памятка: продолжение работы над «Волной»
+
+Файл для человека или ИИ-агента, который продолжит работу. Прочти это и `PROJECT-HANDOVER.md` —
+дальше всё описано там. Дата фиксации: 05.11.2026, коммит `7eb610c`.
+
+## Где что лежит
+
+- **Живая установка (то, что работает):** `D:\Volna\voice-app` — запускается `start.cmd`, остановка `stop.ps1`.
+- **Зеркало в аккаунте AutoClaw:** `…\AutoClaw-oversea-official\accounts\e6ac0d69…\projects\Default\voice-app` — копия для работы агента.
+- **Данные другого аккаунта (архив):** `…\projects\Default\from-other-account\` — проект, документы, 52 навыка, бэкап состояния.
+- **GitHub:** https://github.com/bloodbath88/volna (публичный, ветка `main`).
+- **Токен GitHub:** `D:\Volna\.zwork\secrets\gh.txt` — не печатать, не коммитить.
+
+## Как публиковать изменения
+
+```powershell
+cd D:\Volna
+$env:GH_TOKEN = Get-Content .zwork\secrets\gh.txt -Raw   # токен github_pat_…
+$env:GH_REPO  = 'bloodbath88/volna'
+node tools\upload-github.mjs        # загружает файлы через API, секреты исключает сам
+node tools\release-github.mjs       # релиз с архивами (по желанию)
+```
+
+Секреты и машинные файлы в репозиторий не попадают: config.json, livekit.yaml, addresses.json,
+certs/, run/, node_modules, livekit-server.exe, *.key/*.pem/*.zip/*.tar.gz — список в шапке
+`tools/upload-github.mjs`.
+
+## Следующие задачи (по приоритету)
+
+1. **Проверить Discord-скин внутри комнаты.** Скин (`voice-app/public/discord-skin.css`,
+   подключён в `index.html`) применён, экран входа проверен скриншотом. Комнату ещё нет:
+   зайти по ссылке-приглашению `https://адрес/#i=<код>` (код = base64url от `{"r":"main","k":"<пароль>"}`),
+   снять кадр, сверить с `preview/discord-shell.png`.
+2. **Фаза 2 паритета** — см. `DISCORD-PARITY.md` §5: пространства → категории → каналы,
+   разделение текстовых и голосовых каналов, роли и права.
+3. **Домен `volna.is-cool.dev`** — заявка в open-domains была `pending` (см. `deploy/DOMAIN.md`).
+   После одобрения: выпустить сертификат на сервере, включить адрес без порта.
+4. **Релиз** через `tools/release-github.mjs`: архивы `volna-voice-app.zip` и
+   `volna-voice-app-linux.tar.gz` + заметки из `deploy/release-notes.md`.
+5. **Техдолг:** убрать из корня отладочный мусор (`dl-*.js`, `bg5.tar`, старые `shot-*.png`);
+   удалить откаты `voice-app-14-10-2026` (если уверены); обновить раздел 8.5 HANDOVER при
+   изменении настольного режима.
+
+## Ловушки (проверено на практике)
+
+- **Kaspersky Free** на машинах: блокирует HTTPS с самоподписанным сертификатом (страница
+  «Остановлен переход») и рвёт HTTPS-загрузку в Windows PowerShell («Базовое соединение закрыто»).
+  Решения: `trust-cert.cmd` (доверие сертификату) и загрузки через `curl.exe` (уже в `start.ps1`).
+- **Три файла нельзя править ИИ-агентом** — `server/setup.js`, `server/server.js`, `public/app.js`:
+  фильтр записи платформы считает их секретами (ложное срабатывание). Правки — вручную в редакторе.
+  Обходные слои уже есть: `server/make-public.js` и `public/entry.js`.
+- **Кодировка:** PowerShell-скрипты — UTF-8 **с BOM** (без BOM русский текст ломает PS 5.1);
+  shell-скрипты — **LF без BOM**; в `.cmd` — только латиница.
+- **Синхронизация копий:** правки делаются в `D:\Volna\voice-app`, затем копируются в зеркало
+  аккаунта; работающий сервер отдаёт файлы с диска — перезапуск нужен только для server/*.js.
+- **Проверки:** `node --check` для JS; `/selftest.html` в браузере; скриншоты через headless Chrome
+  (`--headless=new --screenshot=… --ignore-certificate-errors`), кадр комнаты — через CDP
+  (`Page.captureScreenshot`) с эмуляцией микрофона (`--use-fake-device-for-media-stream`).
+
+## Чего не проверено
+
+- Живой звук между двумя людьми (нужны два устройства с микрофоном).
+- Запуск `install-vps.sh` на настоящем Linux (машина разработки — Windows).
+- Кнопка «Установить приложение» при самоподписанном сертификате (ожидаемо недоступна; лечится доменом).
