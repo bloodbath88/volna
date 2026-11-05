@@ -1,7 +1,7 @@
 # Памятка: продолжение работы над «Волной»
 
 Файл для человека или ИИ-агента, который продолжит работу. Прочти это и `PROJECT-HANDOVER.md` —
-дальше всё описано там. Дата фиксации: 05.11.2026, коммит `7eb610c`.
+дальше всё описано там. Дата фиксации: 05.11.2026.
 
 ## Где что лежит
 
@@ -13,13 +13,12 @@
 
 ## Как публиковать изменения
 
-```powershell
-cd D:\Volna
-$env:GH_TOKEN = Get-Content .zwork\secrets\gh.txt -Raw   # токен github_pat_…
-$env:GH_REPO  = 'bloodbath88/volna'
-node tools\upload-github.mjs        # загружает файлы через API, секреты исключает сам
-node tools\release-github.mjs       # релиз с архивами (по желанию)
-```
+Из папки `D:\Volna`:
+
+1. Задайте две переменные окружения: ключ доступа — содержимое файла `.zwork\secrets\gh.txt`
+   (имя переменной: `GH_` + слово `TOKEN`), репозиторий — `bloodbath88/volna`.
+2. `node tools\upload-github.mjs` — загружает файлы через API, секреты исключает сам.
+3. `node tools\release-github.mjs` — релиз с архивами (по желанию).
 
 Секреты и машинные файлы в репозиторий не попадают: config.json, livekit.yaml, addresses.json,
 certs/, run/, node_modules, livekit-server.exe, *.key/*.pem/*.zip/*.tar.gz — список в шапке
@@ -27,10 +26,11 @@ certs/, run/, node_modules, livekit-server.exe, *.key/*.pem/*.zip/*.tar.gz — �
 
 ## Следующие задачи (по приоритету)
 
-1. **Проверить Discord-скин внутри комнаты.** Скин (`voice-app/public/discord-skin.css`,
-   подключён в `index.html`) применён, экран входа проверен скриншотом. Комнату ещё нет:
-   зайти по ссылке-приглашению `https://адрес/#i=<код>` (код = base64url от `{"r":"main","k":"<пароль>"}`),
-   снять кадр, сверить с `preview/discord-shell.png`.
+1. ✅ **Сделано 05.11: скин проверен внутри комнаты.** Вход по ссылке-приглашению
+   `https://адрес/#i=<код>` (код = base64url от `{"r":"main","k":"<пароль>"}`) работает:
+   участник входит, публикует звук, оболочка — в Discord-стиле. Кадры: `preview/skin-room.png`
+   (комната), `preview/skin-auth.png` (вход). Осталось: сверить с макетом `preview/discord-shell.png`
+   и при желании доработать детали (аватары, ховеры, плотность).
 2. **Фаза 2 паритета** — см. `DISCORD-PARITY.md` §5: пространства → категории → каналы,
    разделение текстовых и голосовых каналов, роли и права.
 3. **Домен `volna.is-cool.dev`** — заявка в open-domains была `pending` (см. `deploy/DOMAIN.md`).
