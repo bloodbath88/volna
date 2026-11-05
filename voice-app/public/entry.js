@@ -377,7 +377,7 @@
     const grid = $('#grid');
     if (grid) grid.classList.remove('hidden');
     const stage = $('#stageWrap');
-    if (stage) stage.classList.add('hidden');
+    if (stage && !SWITCH.active) stage.classList.add('hidden'); // при переходе оставляем кадр на экране
     showMicWarn('');
     showPassField(); // после выхода пароль снова можно менять руками
     // чат комнаты начинается заново
@@ -1231,13 +1231,16 @@
 
   function saveBooks() { store.set('rooms', JSON.stringify(ROOMS.books)); }
 
+  const TRANSLIT = { а:'a', б:'b', в:'v', г:'g', д:'d', е:'e', ё:'e', ж:'zh', з:'z', и:'i', й:'y', к:'k', л:'l', м:'m', н:'n', о:'o', п:'p', р:'r', с:'s', т:'t', у:'u', ф:'f', х:'h', ц:'c', ч:'ch', ш:'sh', щ:'sch', ъ:'', ы:'y', ь:'', э:'e', ю:'yu', я:'ya' };
+
   function cleanRoomName(raw) {
     // Двойной дефис — разделитель «родитель--подкомната», его нельзя схлопывать.
     // Сохраняем его через временную метку, чистим остальное и возвращаем назад.
     const SEP = '~sep~';
     return String(raw || '').trim().toLowerCase()
       .replace(/--/g, SEP)
-      .replace(/[^a-z0-9а-яё._~-]/gi, '-')
+      .replace(/[а-яё]/gi, (ch) => TRANSLIT[ch.toLowerCase()] || '')
+      .replace(/[^a-z0-9._~-]/gi, '-')
       .replace(/-{2,}/g, '-')
       .replace(/^[-~]|[-~]$/g, '')
       .replace(new RegExp(SEP, 'g'), '--')

@@ -386,7 +386,15 @@ if (!gotLock) {
 
     createWindow(SPLASH);             // окно открывается сразу с заставкой
 
-    try { await session.defaultSession.clearCache(); } catch (e) { /* кэш уже пуст */ }
+    try {
+      const stampFile = path.join(app.getPath('userData'), 'cache-stamp.json');
+      let last = 0;
+      try { last = Number(JSON.parse(require('fs').readFileSync(stampFile, 'utf8')).at || 0); } catch (e) { last = 0; }
+      if (Date.now() - last > 24 * 3600 * 1000) {
+        await session.defaultSession.clearCache();
+        require('fs').writeFileSync(stampFile, JSON.stringify({ at: Date.now() }));
+      }
+    } catch (e) { /* кэш не критичен для запуска */ }
     try { await session.defaultSession.clearStorageData({ storages: ['serviceworkers'] }); } catch (e) {}
 
     if (REMOTE) {
