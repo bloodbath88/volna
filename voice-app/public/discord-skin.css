@@ -1,0 +1,108 @@
+/*
+ * Discord-скин «Волны» (фаза 1 паритета).
+ * Подключается ПОСЛЕ styles.css и перекрывает палитру, фон и метрики
+ * на наблюдаемые в Discord значения. Чужие файлы и ассеты не используются.
+ * Отключается удалением этой строки из index.html.
+ */
+
+:root{
+  --bg:#1e1f22;
+  --panel:#2b2d31;
+  --panel2:#232428;
+  --panel3:#2e3035;
+  --line:#3f4147;
+  --line2:#4a4d54;
+  --text:#f2f3f5;
+  --muted:#b5bac1;
+  --accent:#5865f2;
+  --accent2:#4752c4;
+  --red:#f23f43;
+  --amber:#f0b232;
+  --r:8px;
+  --r-sm:6px;
+  --shadow:0 8px 24px rgba(0,0,0,.35);
+  --glass:none;
+
+  /* дополнительные токены скина */
+  --chat:#313338;
+  --rail:#1e1f22;
+  --hover:#35373c;
+  --active:#404249;
+  --input:#383a40;
+  --faint:#949ba4;
+  --green:#23a55a;
+}
+
+/* фон приложения — ровный тёмный, без арта и кислотных свечений */
+body{
+  background:#1e1f22 !important;
+}
+
+/* экран входа — вместо фэнтези-арта */
+.join{
+  background:
+    radial-gradient(700px 420px at 18% 0%, rgba(88,101,242,.10), transparent 62%),
+    #2b2d31 !important;
+}
+
+/* стеклянные панели — выключаем: у Discord поверхности плоские */
+.join-card, .btn, .settings, .popover, .chat-panel, .banner,
+.channels, .topbar, .tile, .person, .stage, .voicebar{
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+/* кнопки */
+.btn.primary{
+  background:#5865f2 !important;
+  border-color:transparent !important;
+  color:#fff !important;
+  font-weight:600 !important;
+  box-shadow:none !important;
+}
+.btn.primary:hover{background:#4752c4 !important}
+.btn:hover{background:#35373c !important}
+.btn.ghost{background:transparent !important}
+
+/* скроллбары — нейтральные тёмные */
+*{
+  scrollbar-width:thin !important;
+  scrollbar-color:#1a1b1e transparent !important;
+}
+::-webkit-scrollbar{width:8px !important;height:8px !important}
+::-webkit-scrollbar-thumb{
+  background:#1a1b1e !important;border-radius:999px !important;
+  border:2px solid transparent;background-clip:content-box !important;
+}
+::-webkit-scrollbar-thumb:hover{background:#202225 !important}
+
+/* пинг и статусы — спокойные, без кислотного свечения */
+.ping.good i{background:#23a55a !important;box-shadow:none !important}
+.friend-row.online .friend-dot{background:#23a55a !important;box-shadow:none !important}
+.tile.speaking{border-color:rgba(35,165,90,.5) !important;box-shadow:0 0 0 1px rgba(35,165,90,.3) !important}
+.tile.speaking .avatar{box-shadow:0 0 0 3px rgba(35,165,90,.75) !important}
+.person.speaking{border-color:rgba(35,165,90,.42) !important;background:rgba(35,165,90,.06) !important}
+
+/* панели и карточки — радиусы как в Discord */
+.join-card, .channels, .topbar, .settings, .popover, .chat-panel,
+.banner, .tile, .person, .chan-row, .msg{
+  border-radius:8px !important;
+}
+
+/* чат-панель: нейтральный разделитель вместо лаймового */
+.chat-panel{
+  border-top:1px solid #3f4147 !important;
+  background:rgba(0,0,0,.20) !important;
+}
+
+/* поле ввода и поля форм — поверхности Discord */
+.field input, .field select, .room-new input, .chat-form input{
+  background:#383a40 !important;
+  border-color:transparent !important;
+}
+.field input:focus, .field select:focus, .room-new input:focus, .chat-form input:focus{
+  border-color:rgba(88,101,242,.6) !important;
+}
+
+/* ссылки и акцентные тексты — в фирменный синий, но приглушённый */
+a{color:#c9cdfb !important}
