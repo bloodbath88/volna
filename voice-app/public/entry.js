@@ -2669,12 +2669,33 @@
     setHostName(); // на машине с сервером имя по умолчанию — «Admin»
 
     const inv = inviteFromLocation();
-    if (inv && applyInvite(inv)) {
+    let invApplied = inv ? applyInvite(inv) : false;
+    if (invApplied) {
       cleanHash();                 // ключ комнаты не остаётся в адресной строке
       announceInvite(inv);
       setHostName();
       toast('Данные комнаты подставлены — нажмите «Войти в комнату»');
       return;
+    }
+    if (inv) {
+      // Экран входа мог быть ещё не готов (например, проверялся локальный замок).
+      // Повторяем подстановку приглашения из адреса — иначе уходит пустой пароль
+      // и человек после регистрации получает «Неверный пароль комнаты».
+      let invTries = 0;
+      const invTimer = setInterval(() => {
+        invTries++;
+        const still = inviteFromLocation();
+        if (!still) { clearInterval(invTimer); return; }
+        if (__cvR) {
+          clearInterval(invTimer);
+          cleanHash();
+          announceInvite(still);
+          setHostName();
+          toast('Данные комнаты подставлены — нажмите «Войти в комнату»');
+        } else if (invTries > 20) {
+          clearInterval(invTimer);
+        }
+      }, 700);
     }
 
     // Чистый вход по адресу без приглашения: убираем следы прошлой неудачной авто-попытки
@@ -2691,7 +2712,7 @@
     if (store.get('auto', '1') !== '0') {
       const saved = readCode(store.get('invite', ''));
       const urlRoom = (new URLSearchParams(location.search).get('room') || '').trim();
-      if (saved && (!urlRoom || urlRoom === saved.room) && applyInvite(saved)) {
+      if (saved && saved.key && (!urlRoom || urlRoom === saved.room) && applyInvite(saved)) {
         toast('Последняя комната подставлена — нажмите «Войти в комнату»');
       }
     }
