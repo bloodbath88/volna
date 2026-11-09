@@ -127,3 +127,9 @@ a{color:#c9cdfb !important}
   opacity:0;transition:opacity .12s;
 }
 .chan-row:hover .chan-add,.chan-row:hover .chan-edit,.chan-row:hover .chan-del{opacity:1}
+.cv-count{
+  margin-left:auto;padding-right:6px;font-size:11px;font-weight:600;
+  color:var(--faint);font-variant-numeric:tabular-nums;
+}
+.chan-row[data-cv-live] .cv-ic{color:var(--text)}
+.chan-row[data-cv-live] .chan-name{color:var(--text);font-weight:500}
