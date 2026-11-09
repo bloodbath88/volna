@@ -1,26 +1,30 @@
 /*
  * «Волна» — вид списка каналов как в Discord (фаза 2 паритета).
  * Не трогает entry.js: слушает перерисовку #channelList и оформляет готовые строки —
- * добавляет категории, иконки и живые счётчики участников (из /api/rooms).
- * Обработчики родных кнопок (+/✎/✕) не теряются — строки только украшаются.
+ * добавляет категории, иконки, живые счётчики участников и два раздела: текстовый канал
+ * «Общая переписка» и голосовые комнаты. Обработчики родных кнопок (+/✎/✕) не теряются.
  * Отключается удалением этой строки из index.html.
  */
 (function () {
   'use strict';
 
   const LIST_SEL = '#channelList';
-  const TEXT_HINTS = ['общая переписка', 'obshaya-perepiska', 'text', 'текст'];
+  const TEXT_ROOM = 'obshaya-perepiska';
+  const TEXT_LABEL = 'Общая переписка';
   const SUB_SEP = '--';
   const REFRESH_MS = 5000;
+  const NATIVE_SEL = '.chan-row:not(.cv-text-row):not(.cv-voice-row)';
 
   let scheduled = false;
   let lastRows = -1;
-  let counts = {}; // имя комнаты LiveKit -> участники
+  let counts = {};      // имя комнаты LiveKit -> участники
+  let voiceMemory = {}; // id голосовой комнаты -> подпись (запоминаем родные строки)
 
-  function isText(row) {
-    const name = (row.querySelector('.chan-name') || {}).textContent || '';
-    const low = String(name).trim().toLowerCase();
-    return TEXT_HINTS.some((t) => low === t || low.startsWith(t));
+  function dbg() { return window.__volnaDebug || null; }
+  function callDbg(name) {
+    const d = dbg();
+    if (!d || typeof d[name] !== 'function') return undefined;
+    try { return d[name](); } catch (e) { return undefined; }
   }
 
   function makeCat(text) {
@@ -44,74 +48,141 @@
     updateCounts();
   }
 
-  // id строк списка: первая — родительская, дальше подкомнаты в порядке subs()
+  // точные id родных строк: первая — родительская комната, дальше подкомнаты
   function rowIds(rows) {
-    const dbg = window.__volnaDebug;
-    if (!dbg || typeof dbg.subs !== 'function') return null;
-    let info;
-    try { info = dbg.subs(); } catch (e) { return null; }
+    const info = callDbg('subs');
     const parent = info && info.room;
     const list = (info && info.list) || [];
     if (!parent || rows.length !== list.length + 1) return null; // разметка устарела — не угадываем
     return rows.map((row, i) => (i === 0 ? parent : parent + SUB_SEP + list[i - 1]));
   }
 
-  function updateCounts() {
-    const box = document.querySelector(LIST_SEL);
-    if (!box) return;
-    const rows = Array.from(box.querySelectorAll('.chan-row'));
+  function isTextId(id) {
+    return id === TEXT_ROOM || String(id).startsWith(TEXT_ROOM + SUB_SEP);
+  }
+
+  function classify(rows) {
     const ids = rowIds(rows);
-    if (!ids) return;
-    rows.forEach((row, i) => {
-      const n = counts[ids[i]] || 0;
-      let badge = row.querySelector('.cv-count');
-      if (n > 0) {
-        if (!badge) {
-          badge = document.createElement('span');
-          badge.className = 'cv-count';
-          const btn = row.querySelector('.chan-add, .chan-edit');
-          row.insertBefore(badge, btn || null);
-        }
-        badge.textContent = n;
-        row.setAttribute('data-cv-live', '1');
-      } else {
-        if (badge) badge.remove();
-        row.removeAttribute('data-cv-live');
-      }
+    return rows.map((row, i) => {
+      if (ids && ids[i]) return isTextId(ids[i]) ? 'text' : 'voice';
+      const low = ((row.querySelector('.chan-name') || {}).textContent || '').trim().toLowerCase();
+      return (low === 'общая переписка' || low.startsWith('обша') || low.startsWith('obshaya') || low === 'text') ? 'text' : 'voice';
     });
   }
 
-  /* ---- категории и иконки ---- */
+  function setBadge(row, n) {
+    let badge = row.querySelector('.cv-count');
+    if (n > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'cv-count';
+        const btn = row.querySelector('.chan-add, .chan-edit');
+        row.insertBefore(badge, btn || null);
+      }
+      badge.textContent = n;
+      row.setAttribute('data-cv-live', '1');
+    } else {
+      if (badge) badge.remove();
+      row.removeAttribute('data-cv-live');
+    }
+  }
+
+  function updateCounts() {
+    const box = document.querySelector(LIST_SEL);
+    if (!box) return;
+    const rows = Array.from(box.querySelectorAll(NATIVE_SEL));
+    const ids = rowIds(rows);
+    if (ids) rows.forEach((row, i) => setBadge(row, counts[ids[i]] || 0));
+    [box.querySelector('.cv-text-row'), box.querySelector('.cv-voice-row')].forEach((row) => {
+      if (row) setBadge(row, counts[row.dataset.cvId] || 0);
+    });
+  }
+
+  /* ---- свои строки: текстовый и голосовой каналы ---- */
+
+  function makeRow(kind, id, label) {
+    const row = document.createElement('div');
+    row.className = 'chan-row cv-' + kind + '-row';
+    row.dataset.cvId = id;
+    if (callDbg('currentRoom') === id) row.classList.add('current');
+    const ic = document.createElement('span');
+    ic.className = 'cv-ic';
+    ic.textContent = kind === 'text' ? '#' : '🔊';
+    ic.setAttribute('aria-hidden', 'true');
+    const name = document.createElement('span');
+    name.className = 'chan-name';
+    name.textContent = label;
+    row.append(ic, name);
+    setBadge(row, counts[id] || 0);
+    row.addEventListener('click', () => {
+      if (typeof (dbg() || {}).switchToRoom === 'function') {
+        try { dbg().switchToRoom(id); } catch (e) { /* ничего */ }
+      }
+    });
+    return row;
+  }
+
+  /* ---- категории, иконки, свои строки ---- */
 
   function decorate() {
     scheduled = false;
     const box = document.querySelector(LIST_SEL);
     if (!box) return;
 
-    const rows = Array.from(box.querySelectorAll('.chan-row'));
+    const rows = Array.from(box.querySelectorAll(NATIVE_SEL));
     if (!rows.length) return;
 
-    // иконки — при каждой перерисовке (строки создаются заново)
-    rows.forEach((row) => {
-      if (row.querySelector('.cv-ic')) return;
-      const ic = document.createElement('span');
+    const ids = rowIds(rows);
+    const kinds = classify(rows);
+
+    // иконки и подписи — при каждой перерисовке (строки создаются заново)
+    rows.forEach((row, i) => {
+      let ic = row.querySelector('.cv-ic');
+      if (!ic) {
+        ic = document.createElement('span');
+        ic.setAttribute('aria-hidden', 'true');
+        row.insertBefore(ic, row.firstChild);
+      }
       ic.className = 'cv-ic';
-      ic.textContent = isText(row) ? '#' : '🔊';
-      ic.setAttribute('aria-hidden', 'true');
-      row.insertBefore(ic, row.firstChild);
+      ic.textContent = kinds[i] === 'text' ? '#' : '🔊';
+      const label = row.querySelector('.chan-name');
+      // текстовую комнату называем как в приложении
+      if (kinds[i] === 'text' && label && ids && ids[i] === TEXT_ROOM && label.textContent !== TEXT_LABEL) {
+        label.textContent = TEXT_LABEL;
+      }
+      // запоминаем подписи голосовых комнат (пустые не запоминаем)
+      if (kinds[i] === 'voice' && ids && ids[i]) {
+        const lbl = label ? String(label.textContent) : '';
+        if (lbl.trim()) voiceMemory[ids[i]] = lbl;
+      }
     });
 
-    // категории — когда состав изменился ИЛИ их стёрла перерисовка entry.js (она чистит весь список)
+    // свои строки и категории — когда состав изменился ИЛИ их стёрла перерисовка entry.js
     if (rows.length !== lastRows || !box.querySelector('.cv-cat')) {
       lastRows = rows.length;
       box.querySelectorAll('.cv-cat').forEach((n) => n.remove());
 
-      const text = [];
-      const voice = [];
-      rows.forEach((row) => (isText(row) ? text : voice).push(row));
+      const nativeTextIdx = kinds.indexOf('text');
+      const nativeVoiceIdx = kinds.indexOf('voice');
 
-      if (text.length) box.insertBefore(makeCat('Текстовые каналы'), text[0]);
-      if (voice.length) box.insertBefore(makeCat(text.length ? 'Голосовые каналы' : 'Голосовые комнаты'), voice[0]);
+      // 1. текстовый канал сверху, если родной строки сейчас нет
+      if (nativeTextIdx < 0) box.insertBefore(makeRow('text', TEXT_ROOM, TEXT_LABEL), box.firstChild);
+
+      // 2. голосовой канал снизу, если мы в текстовой комнате (родных голосовых нет)
+      //    rooms().active бывает пустым МАССИВОМ ([] — правдив в JS!), поэтому только строка
+      if (nativeVoiceIdx < 0) {
+        const raw = (callDbg('rooms') || {}).active;
+        const activeId = typeof raw === 'string' ? raw.trim() : '';
+        const voiceId = activeId && !isTextId(activeId) ? activeId : 'main';
+        const label = voiceMemory[voiceId] || (voiceId === 'main' ? 'Основной' : String(voiceId).split(SUB_SEP).pop());
+        box.append(makeRow('voice', voiceId, label));
+      }
+
+      // 3. категории над разделами
+      const textRow = box.querySelector('.cv-text-row') || (nativeTextIdx >= 0 ? rows[nativeTextIdx] : null);
+      if (textRow) box.insertBefore(makeCat('Текстовые каналы'), textRow);
+      const voiceRow = box.querySelector('.cv-voice-row') || (nativeVoiceIdx >= 0 ? rows[nativeVoiceIdx] : null);
+      if (voiceRow) box.insertBefore(makeCat('Голосовые каналы'), voiceRow);
 
       const oldTitle = document.querySelector('.chan-title');
       if (oldTitle) oldTitle.style.display = 'none';
@@ -136,6 +207,7 @@
     } catch (e) { /* очень старый браузер */ }
     setInterval(refreshCounts, REFRESH_MS); // живые счётчики
     setInterval(schedule, 3000); // подстраховка перерисовок
+    try { window.__cvDebug = { memory: () => voiceMemory, counts: () => counts }; } catch (e) { /* ничего */ }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
