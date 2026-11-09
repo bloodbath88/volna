@@ -133,3 +133,28 @@ a{color:#c9cdfb !important}
 }
 .chan-row[data-cv-live] .cv-ic{color:var(--text)}
 .chan-row[data-cv-live] .chan-name{color:var(--text);font-weight:500}
+
+/* панель пользователя внизу сайдбара — как в Discord */
+.channels{display:flex;flex-direction:column}
+.chan-scroll{flex:1 1 auto;min-height:0}
+.cv-user{
+  flex:none;display:flex;align-items:center;gap:8px;padding:8px 10px;
+  background:#232428;border-top:1px solid rgba(255,255,255,.06);
+}
+.cv-avatar{
+  width:32px;height:32px;border-radius:50%;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:600;font-size:14px;color:#fff;background:#5865f2;
+}
+.cv-user-name{
+  flex:1;font-size:14px;font-weight:600;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.cv-user-btns{display:flex;gap:2px}
+.cv-ub{
+  width:28px;height:28px;border-radius:4px;border:0;background:transparent;
+  color:var(--muted);font-size:14px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.cv-ub:hover{background:var(--hover);color:var(--text)}
+.cv-ub.danger:hover{background:#da373c;color:#fff}
