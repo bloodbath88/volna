@@ -35,11 +35,10 @@ certs/, run/, node_modules, livekit-server.exe, *.key/*.pem/*.zip/*.tar.gz — �
    разделение текстовых и голосовых каналов, роли и права.
 3. **Домен `volna.is-cool.dev`** — заявка в open-domains была `pending` (см. `deploy/DOMAIN.md`).
    После одобрения: выпустить сертификат на сервере, включить адрес без порта.
-4. **Релиз** через `tools/release-github.mjs`: архивы `volna-voice-app.zip` и
-   `volna-voice-app-linux.tar.gz` + заметки из `deploy/release-notes.md`.
-5. **Техдолг:** убрать из корня отладочный мусор (`dl-*.js`, `bg5.tar`, старые `shot-*.png`);
-   удалить откаты `voice-app-14-10-2026` (если уверены); обновить раздел 8.5 HANDOVER при
-   изменении настольного режима.
+4. ✅ **Сделано 09.11: релиз v1.8.0** — https://github.com/bloodbath88/volna/releases/tag/v1.8.0
+   (zip 10,2 МБ + linux 8,2 МБ, заметки в `deploy/release-notes.md`).
+5. ✅ **Сделано 09.11: техдолг** — из корня убраны `dl-*.js`, `bg5.tar`, старые `shot-*.png`
+   (перенесены в `preview/old/`). Осталось: удалить откат `voice-app-14-10-2026` после проверки.
 
 ## Ловушки (проверено на практике)
 
