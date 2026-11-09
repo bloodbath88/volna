@@ -1095,6 +1095,17 @@
       }
       box.remove();
       toast('Вы вошли как ' + login);
+      try {
+        // Автовход: если по ссылке пришло приглашение (комната и ключ уже в полях),
+        // после первого входа на устройстве сразу подключаемся к комнате — без лишнего клика.
+        const js = document.querySelector('#joinScreen');
+        const jr = document.querySelector('#joinBtn');
+        const ri = document.querySelector('#roomInput');
+        const pi = document.querySelector('#passInput');
+        if (js && !js.classList.contains('hidden') && jr && ri && ri.value.trim() && pi && pi.value) {
+          jr.click();
+        }
+      } catch (e) { /* не критично */ }
     });
 
     setTimeout(() => {

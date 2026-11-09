@@ -111,6 +111,26 @@ def t15_moderator_crown(browser):
         check('T15 корона модератора в панели', False, type(exc).__name__ + ': ' + str(exc)[:120])
 
 
+def t16_autojoin(browser):
+    """T16 автовход после первой регистрации"""
+    try:
+        code2 = base64.urlsafe_b64encode(json.dumps({'r': 'main', 'k': cfg['roomPassword']}, separators=(',', ':')).encode()).decode().rstrip('=')
+        url2 = BASE + '/?qa=' + str(int(time.time())) + '#i=' + code2
+        ctx2 = browser.new_context(viewport={'width': 1440, 'height': 900}, ignore_https_errors=True)
+        pg = ctx2.new_page()
+        pg.goto(url2, wait_until='domcontentloaded')
+        pg.wait_for_selector('#authScreen', timeout=20000)
+        pg.click('[data-mode="up"]')
+        pg.fill('#authLogin', 'qa-aj-' + str(int(time.time())))
+        pg.fill('#authPass', 'qa-pass-2026')
+        pg.fill('#authPass2', 'qa-pass-2026')
+        pg.click('#authSubmit')
+        pg.wait_for_function("document.documentElement.dataset.volnaRooms && document.documentElement.dataset.volnaRooms !== '0'", timeout=30000)
+        check('T16 автовход после регистрации', True)
+        ctx2.close()
+    except Exception as exc:
+        check('T16 автовход после регистрации', False, type(exc).__name__ + ': ' + str(exc)[:120])
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -257,6 +277,7 @@ def main():
         t13()
         t14_roles(page)
         t15_moderator_crown(browser)
+        t16_autojoin(browser)
 
         browser.close()
 
