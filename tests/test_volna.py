@@ -58,6 +58,59 @@ INVITE = BASE + '/#i=' + room_code
 ACCOUNT = 'qa-' + str(int(time.time()))
 
 
+
+# ---- T14-T15: роли (модератор/участник) ----
+def t14_roles(page):
+    """T14 роль в ответе сервера"""
+    try:
+        cfg2 = json.loads(Path('D:/Volna/voice-app/config.json').read_text(encoding='utf-8'))
+        admin = cfg2.get('adminPassword', '')
+        if not admin:
+            check('T14 роль в ответе сервера', True, 'пропущено: adminPassword не задан')
+            return
+        for who, key, expected in (('модератор', admin, 'moderator'), ('участник', cfg2['roomPassword'], 'participant')):
+            body = '{"name":"qa-role","room":"main","password":"' + key + '"}'
+            r = page.evaluate("(async () => { const r = await fetch('/api/token', {method:'POST', headers:{'Content-Type':'application/json'}, body: " + json.dumps(body) + "}); return JSON.stringify({s: r.status, j: await r.json()}); })()")
+            j = json.loads(r)
+            got = (j.get('j') or {}).get('role', '')
+            check('T14 роль: ' + who, str(j.get('s')) == '200' and got == expected, 'статус ' + str(j.get('s')) + ', роль ' + str(got))
+    except Exception as exc:
+        check('T14 роль в ответе сервера', False, type(exc).__name__ + ': ' + str(exc)[:120])
+
+
+def t15_moderator_crown(browser):
+    """T15 корона модератора в панели"""
+    try:
+        cfg2 = json.loads(Path('D:/Volna/voice-app/config.json').read_text(encoding='utf-8'))
+        admin = cfg2.get('adminPassword', '')
+        if not admin:
+            check('T15 корона модератора', True, 'пропущено: adminPassword не задан')
+            return
+        code2 = base64.urlsafe_b64encode(json.dumps({'r': 'main', 'k': admin}, separators=(',', ':')).encode()).decode().rstrip('=')
+        url2 = BASE + '/?qa=' + str(int(time.time())) + '#i=' + code2
+        ctx2 = browser.new_context(viewport={'width': 1440, 'height': 900}, ignore_https_errors=True)
+        pg = ctx2.new_page()
+        pg.goto(BASE + '/', wait_until='domcontentloaded')
+        pg.wait_for_selector('#authScreen', timeout=20000)
+        pg.click('[data-mode="up"]')
+        pg.fill('#authLogin', 'qa-mod-' + str(int(time.time())))
+        pg.fill('#authPass', 'qa-pass-2026')
+        pg.fill('#authPass2', 'qa-pass-2026')
+        pg.click('#authSubmit')
+        pg.wait_for_timeout(2500)
+        pg.goto(url2, wait_until='domcontentloaded')
+        pg.wait_for_selector('#joinBtn', timeout=20000)
+        pg.click('#joinBtn')
+        pg.wait_for_function("document.documentElement.dataset.volnaRooms && document.documentElement.dataset.volnaRooms !== '0'", timeout=30000)
+        time.sleep(4)
+        crown = pg.locator('.cv-crown')
+        visible = crown.count() == 1 and crown.first.is_visible()
+        check('T15 корона модератора в панели', visible)
+        ctx2.close()
+    except Exception as exc:
+        check('T15 корона модератора в панели', False, type(exc).__name__ + ': ' + str(exc)[:120])
+
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -202,6 +255,8 @@ def main():
                   ('ошибок: %d; первая: ' % len(console_errors)) + (console_errors[0] if console_errors else ''))
 
         t13()
+        t14_roles(page)
+        t15_moderator_crown(browser)
 
         browser.close()
 

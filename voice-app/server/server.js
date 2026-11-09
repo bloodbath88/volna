@@ -130,7 +130,9 @@ app.post('/api/token', async (req, res) => {
   }
 
   const body = req.body || {};
-  if (cfg.roomPassword && !safeEqual(body.password || '', cfg.roomPassword)) {
+  const isAdmin = !!cfg.adminPassword && safeEqual(body.password || '', cfg.adminPassword);
+  const role = isAdmin ? 'moderator' : 'participant';
+  if (!isAdmin && cfg.roomPassword && !safeEqual(body.password || '', cfg.roomPassword)) {
     return res.status(403).json({ error: 'Неверный пароль комнаты' });
   }
 
@@ -144,8 +146,9 @@ app.post('/api/token', async (req, res) => {
       ttl: '12h',
     });
     at.addGrant({ room, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true });
+    at.metadata = JSON.stringify({ role });
     const token = await at.toJwt();
-    res.json({ token, url: 'wss://' + req.headers.host, room });
+    res.json({ token, url: 'wss://' + req.headers.host, room, role });
   } catch (e) {
     console.error('Ошибка выдачи токена:', e.message);
     res.status(500).json({ error: 'Не удалось создать токен' });

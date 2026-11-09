@@ -17,6 +17,26 @@
     ['📴', 'Завершить звонок', '#leaveBtn', 'danger'],
   ];
 
+  /* роль из ответа сервера: слой поверх, app.js не трогаем.
+     сервер присылает поле role в JSON ответе на выдачу доступа — запоминаем
+     его в тот же localStorage, что и штатный store (ключи volna.*) */
+  (function wrapFetch() {
+    if (window.__cvFetchWrapped || typeof window.fetch !== 'function') return;
+    window.__cvFetchWrapped = true;
+    const orig = window.fetch;
+    window.fetch = async function () {
+      const res = await orig.apply(this, arguments);
+      try {
+        const isApi = String((res && res.url) || '').indexOf('/api/') >= 0;
+        if (res && res.ok && isApi && (res.headers.get('content-type') || '').indexOf('json') >= 0) {
+          const j = await res.clone().json();
+          if (j && j.role) localStorage.setItem('volna.role', String(j.role));
+        }
+      } catch (e) { /* не критично */ }
+      return res;
+    };
+  })();
+
   let name = '';
 
   function selfRow() {
@@ -38,9 +58,24 @@
     };
   }
 
+  function ensureCrown(panel) {
+    let crown = panel.querySelector('.cv-crown');
+    if (!crown) {
+      crown = document.createElement('span');
+      crown.className = 'cv-crown';
+      crown.title = 'Модератор';
+      crown.textContent = '👑';
+      const nm = panel.querySelector('.cv-user-name');
+      if (nm) nm.prepend(crown);
+    }
+    return crown;
+  }
+
   function update() {
     const panel = document.querySelector('.cv-user');
     if (!panel) return;
+    const crown = ensureCrown(panel);
+    if (crown) crown.style.display = localStorage.getItem('volna.role') === 'moderator' ? '' : 'none';
     const row = selfRow();
     if (!row) return;
     const nameEl = row.querySelector('.p-name');
@@ -65,9 +100,16 @@
     av.className = 'cv-avatar';
     av.textContent = '?';
 
+    const crown = document.createElement('span');
+    crown.className = 'cv-crown';
+    crown.title = 'Модератор';
+    crown.textContent = '👑';
+    crown.style.display = 'none';
+
     const nm = document.createElement('div');
     nm.className = 'cv-user-name';
     nm.textContent = '…';
+    nm.prepend(crown);
 
     const btns = document.createElement('div');
     btns.className = 'cv-user-btns';
